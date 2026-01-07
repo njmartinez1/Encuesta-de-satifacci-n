@@ -1,0 +1,5 @@
+{
+  "name": "Feedback 360 - Sistema de Evaluación de Desempeño",
+  "description": "Una aplicación profesional de evaluación entre pares (360 feedback) que permite a los empleados evaluarse mutuamente basándose en una matriz de asignación, con exportación de datos y análisis por IA.",
+  "requestFramePermissions": []
+}
