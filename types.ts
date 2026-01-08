@@ -1,14 +1,15 @@
-
-export interface Employee {
+﻿export interface Employee {
   id: string;
   name: string;
   role: string;
+  email: string;
+  isAdmin: boolean;
 }
 
 export interface Question {
   id: number;
   text: string;
-  category: 'Comportamiento' | 'Técnico' | 'Liderazgo' | 'Comunicación';
+  category: string;
 }
 
 export interface Evaluation {

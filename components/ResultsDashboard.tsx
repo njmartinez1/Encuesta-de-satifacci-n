@@ -1,17 +1,17 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { QUESTIONS } from '../constants.ts';
-import { Evaluation, Employee } from '../types.ts';
+import { Evaluation, Employee, Question } from '../types.ts';
 import { analyzeEvaluations } from '../geminiService.ts';
-import { Sparkles, BarChart3, TrendingUp, Info, DownloadCloud } from 'lucide-react';
+import { Sparkles, BarChart3, TrendingUp, Info, Copy } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 interface Props {
   evaluations: Evaluation[];
   employees: Employee[];
+  questions: Question[];
 }
 
-const ResultsDashboard: React.FC<Props> = ({ evaluations, employees }) => {
+const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions }) => {
   const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null);
   const [aiAnalysis, setAiAnalysis] = useState<string>('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -24,7 +24,7 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees }) => {
     const categoryScores: { [key: string]: { total: number, count: number } } = {};
     relevant.forEach(evalu => {
       Object.entries(evalu.answers).forEach(([qId, score]) => {
-        const question = QUESTIONS.find(q => q.id === parseInt(qId));
+        const question = questions.find(q => q.id === parseInt(qId));
         if (question) {
           if (!categoryScores[question.category]) categoryScores[question.category] = { total: 0, count: 0 };
           categoryScores[question.category].total += score as number;
@@ -49,16 +49,20 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees }) => {
     setIsAnalyzing(false);
   };
 
-  const downloadChart = async () => {
+  const copyChartToClipboard = async () => {
     if (!chartRef.current) return;
     const svg = chartRef.current.querySelector('svg');
     if (!svg) return;
+    if (!navigator.clipboard || typeof ClipboardItem === 'undefined') {
+      window.alert('Tu navegador no permite copiar imagenes al portapapeles.');
+      return;
+    }
     const svgData = new XMLSerializer().serializeToString(svg);
     const canvas = document.createElement('canvas');
     const img = new Image();
     const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
     const url = URL.createObjectURL(svgBlob);
-    img.onload = () => {
+    img.onload = async () => {
       canvas.width = img.width * 2;
       canvas.height = img.height * 2;
       const ctx = canvas.getContext('2d');
@@ -67,10 +71,16 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees }) => {
         ctx.fillStyle = 'white';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 0, 0);
-        const link = document.createElement('a');
-        link.href = canvas.toDataURL('image/png');
-        link.download = `grafico_${selectedEmp?.name}.png`;
-        link.click();
+        const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+        if (blob) {
+          try {
+            await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+          } catch (error) {
+            window.alert('No se pudo copiar la imagen.');
+          }
+        } else {
+          window.alert('No se pudo generar la imagen.');
+        }
       }
       URL.revokeObjectURL(url);
     };
@@ -99,7 +109,7 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees }) => {
             <div className="bg-white p-6 rounded-xl border">
               <div className="flex justify-between items-center mb-6">
                 <h3 className="font-bold flex items-center gap-2"><BarChart3 size={20} /> Rendimiento</h3>
-                <button onClick={downloadChart} className="text-indigo-600 flex items-center gap-2 text-xs font-bold"><DownloadCloud size={14} /> Descargar Imagen</button>
+                <button onClick={copyChartToClipboard} className="text-indigo-600 flex items-center gap-2 text-xs font-bold"><Copy size={14} /> Copiar Imagen</button>
               </div>
               <div className="h-64" ref={chartRef}>
                 <ResponsiveContainer width="100%" height="100%">

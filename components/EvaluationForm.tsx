@@ -1,7 +1,6 @@
 
 import React, { useState } from 'react';
-import { QUESTIONS } from '../constants.ts';
-import { Employee, Evaluation } from '../types.ts';
+import { Employee, Evaluation, Question } from '../types.ts';
 import { Save } from 'lucide-react';
 
 console.log("--> [EvaluationForm.tsx] Módulo cargado");
@@ -9,10 +8,11 @@ console.log("--> [EvaluationForm.tsx] Módulo cargado");
 interface Props {
   evaluatorId: string;
   targetEmployee: Employee;
-  onSave: (evaluation: Evaluation) => void;
+  questions: Question[];
+  onSave: (evaluation: Evaluation) => Promise<boolean>;
 }
 
-const EvaluationForm: React.FC<Props> = ({ evaluatorId, targetEmployee, onSave }) => {
+const EvaluationForm: React.FC<Props> = ({ evaluatorId, targetEmployee, questions, onSave }) => {
   const [answers, setAnswers] = useState<{ [key: number]: number }>({});
   const [comments, setComments] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -21,28 +21,39 @@ const EvaluationForm: React.FC<Props> = ({ evaluatorId, targetEmployee, onSave }
     setAnswers(prev => ({ ...prev, [questionId]: score }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (Object.keys(answers).length < QUESTIONS.length) {
+    if (questions.length === 0) {
+      alert("No hay preguntas asignadas para este evaluador.");
+      return;
+    }
+    if (Object.keys(answers).length < questions.length) {
       alert("Por favor, responde todas las preguntas antes de continuar.");
       return;
     }
 
     setIsSubmitting(true);
-    setTimeout(() => {
-      const evaluation: Evaluation = {
-        evaluatorId,
-        evaluatedId: targetEmployee.id,
-        answers,
-        comments,
-        timestamp: new Date().toLocaleString()
-      };
-      onSave(evaluation);
+    const evaluation: Evaluation = {
+      evaluatorId,
+      evaluatedId: targetEmployee.id,
+      answers,
+      comments,
+      timestamp: new Date().toLocaleString()
+    };
+    try {
+      const saved = await onSave(evaluation);
+      if (saved) {
+        setComments('');
+        setAnswers({});
+      }
+    } finally {
       setIsSubmitting(false);
-    }, 800);
+    }
   };
 
-  const progress = Math.round((Object.keys(answers).length / QUESTIONS.length) * 100);
+  const progress = questions.length > 0
+    ? Math.round((Object.keys(answers).length / questions.length) * 100)
+    : 0;
 
   return (
     <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
@@ -63,7 +74,7 @@ const EvaluationForm: React.FC<Props> = ({ evaluatorId, targetEmployee, onSave }
 
       <form onSubmit={handleSubmit} className="p-8">
         <div className="space-y-10">
-          {QUESTIONS.map((q, index) => (
+          {questions.map((q, index) => (
             <div key={q.id} className="border-b border-slate-100 pb-8 last:border-0">
               <div className="flex items-start gap-4 mb-5">
                 <span className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center font-bold">{index + 1}</span>

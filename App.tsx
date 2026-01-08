@@ -1,75 +1,503 @@
-
 import React, { useState, useEffect } from 'react';
-import { EMPLOYEES as INITIAL_EMPLOYEES, ASSIGNMENTS as INITIAL_ASSIGNMENTS, QUESTIONS } from './constants.ts';
-import { Employee, Evaluation, Assignment } from './types.ts';
-import EmployeeSelector from './components/EmployeeSelector.tsx';
+import type { Session } from '@supabase/supabase-js';
+import { Employee, Evaluation, Assignment, Question } from './types.ts';
 import EvaluationForm from './components/EvaluationForm.tsx';
 import ResultsDashboard from './components/ResultsDashboard.tsx';
 import AdminPanel from './components/AdminPanel.tsx';
-import { Download, LayoutDashboard, ClipboardList, LogOut, ChevronRight, Settings } from 'lucide-react';
+import QuestionsPanel from './components/QuestionsPanel.tsx';
+import { Download, LayoutDashboard, ClipboardList, LogOut, ChevronRight, Settings, HelpCircle, Mail } from 'lucide-react';
+import { supabase } from './supabaseClient.ts';
 
-console.log("--> [App.tsx] Módulo cargado");
+type ProfileRow = {
+  id: string;
+  email: string | null;
+  name: string | null;
+  role: string | null;
+  is_admin: boolean | null;
+};
+
+type AssignmentRow = { evaluator_id: string; target_id: string };
+type EvaluatorQuestionRow = { evaluator_id: string; question_id: number };
+type EvaluationRow = {
+  evaluator_id: string;
+  evaluated_id: string;
+  answers: Record<string, number>;
+  comments: string | null;
+  created_at: string | null;
+};
+
+const mapProfile = (profile: ProfileRow): Employee => ({
+  id: profile.id,
+  email: profile.email ?? '',
+  name: profile.name || profile.email || 'Sin nombre',
+  role: profile.role || 'Sin cargo',
+  isAdmin: Boolean(profile.is_admin),
+});
 
 const App: React.FC = () => {
-  console.log("--> [App.tsx] Renderizando componente App");
-  
+  const [session, setSession] = useState<Session | null>(null);
   const [currentUser, setCurrentUser] = useState<Employee | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
-  const [view, setView] = useState<'survey' | 'results' | 'admin'>('survey');
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [evaluatorQuestions, setEvaluatorQuestions] = useState<Record<string, number[]>>({});
+  const [view, setView] = useState<'survey' | 'results' | 'admin' | 'questions'>('survey');
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
+  const [isLoadingSession, setIsLoadingSession] = useState(true);
+  const [isLoadingData, setIsLoadingData] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [emailInput, setEmailInput] = useState('');
+  const [isSendingLink, setIsSendingLink] = useState(false);
+  const [linkSent, setLinkSent] = useState(false);
+  const [loginMode, setLoginMode] = useState<'link' | 'password'>('password');
+  const [passwordInput, setPasswordInput] = useState('');
+  const [isSigningIn, setIsSigningIn] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
 
   useEffect(() => {
-    console.log("--> [App.tsx] useEffect: Cargando datos iniciales");
-    const savedEvals = localStorage.getItem('evaluations_db');
-    const savedEmps = localStorage.getItem('employees_db');
-    const savedAssigns = localStorage.getItem('assignments_db');
-
-    if (savedEvals) setEvaluations(JSON.parse(savedEvals));
-    setEmployees(savedEmps ? JSON.parse(savedEmps) : INITIAL_EMPLOYEES);
-    setAssignments(savedAssigns ? JSON.parse(savedAssigns) : INITIAL_ASSIGNMENTS);
+    let isMounted = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (!isMounted) return;
+      setSession(data.session);
+      setIsLoadingSession(false);
+    });
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+    });
+    return () => {
+      isMounted = false;
+      authListener.subscription.unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('evaluations_db', JSON.stringify(evaluations));
-  }, [evaluations]);
+    const loadData = async () => {
+      if (!session) {
+        setCurrentUser(null);
+        setEmployees([]);
+        setAssignments([]);
+        setEvaluations([]);
+        setQuestions([]);
+        setCategories([]);
+        setEvaluatorQuestions({});
+        return;
+      }
+
+      setIsLoadingData(true);
+      setAuthError(null);
+
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, email, name, role, is_admin')
+        .eq('id', session.user.id)
+        .single();
+
+      if (profileError || !profileData) {
+        setAuthError('Tu cuenta no tiene acceso.');
+        await supabase.auth.signOut();
+        setIsLoadingData(false);
+        return;
+      }
+
+      const userProfile = mapProfile(profileData as ProfileRow);
+      setCurrentUser(userProfile);
+
+      const isAdmin = userProfile.isAdmin;
+
+      const assignmentsQuery = supabase.from('assignments').select('evaluator_id, target_id');
+      if (!isAdmin) assignmentsQuery.eq('evaluator_id', userProfile.id);
+
+      const evaluatorQuestionsQuery = supabase.from('evaluator_questions').select('evaluator_id, question_id');
+      if (!isAdmin) evaluatorQuestionsQuery.eq('evaluator_id', userProfile.id);
+
+      const evaluationsQuery = supabase
+        .from('evaluations')
+        .select('evaluator_id, evaluated_id, answers, comments, created_at');
+      if (!isAdmin) evaluationsQuery.eq('evaluator_id', userProfile.id);
+
+      const [
+        profilesRes,
+        questionsRes,
+        categoriesRes,
+        assignmentsRes,
+        evaluatorQuestionsRes,
+        evaluationsRes,
+      ] = await Promise.all([
+        supabase.from('profiles').select('id, email, name, role, is_admin'),
+        supabase.from('questions').select('id, text, category').order('id'),
+        supabase.from('question_categories').select('name').order('name'),
+        assignmentsQuery,
+        evaluatorQuestionsQuery,
+        evaluationsQuery,
+      ]);
+
+      if (profilesRes.error || questionsRes.error || categoriesRes.error || assignmentsRes.error || evaluatorQuestionsRes.error || evaluationsRes.error) {
+        setAuthError('No se pudieron cargar los datos.');
+        setIsLoadingData(false);
+        return;
+      }
+
+      const employeesList = (profilesRes.data || []).map((profile) => mapProfile(profile as ProfileRow));
+      const questionsList = (questionsRes.data || []) as Question[];
+      const categoriesList = (categoriesRes.data || []).map(row => row.name);
+      const derivedCategories = Array.from(new Set(questionsList.map(question => question.category)));
+
+      const assignmentRows = (assignmentsRes.data || []) as AssignmentRow[];
+      const assignmentsMap = new Map<string, string[]>();
+      assignmentRows.forEach(row => {
+        const targets = assignmentsMap.get(row.evaluator_id) || [];
+        targets.push(row.target_id);
+        assignmentsMap.set(row.evaluator_id, targets);
+      });
+      const assignmentsList: Assignment[] = Array.from(assignmentsMap.entries()).map(([evaluatorId, targets]) => ({
+        evaluatorId,
+        targets,
+      }));
+
+      const evaluatorRows = (evaluatorQuestionsRes.data || []) as EvaluatorQuestionRow[];
+      const evaluatorMap: Record<string, number[]> = {};
+      evaluatorRows.forEach(row => {
+        if (!evaluatorMap[row.evaluator_id]) evaluatorMap[row.evaluator_id] = [];
+        evaluatorMap[row.evaluator_id].push(row.question_id);
+      });
+      const questionIds = questionsList.map(question => question.id);
+      employeesList.forEach(emp => {
+        if (!evaluatorMap[emp.id]) evaluatorMap[emp.id] = questionIds;
+      });
+
+      const evaluationsData = (evaluationsRes.data || []) as EvaluationRow[];
+      const evaluationsList = evaluationsData.map(row => ({
+        evaluatorId: row.evaluator_id,
+        evaluatedId: row.evaluated_id,
+        answers: (row.answers || {}) as { [questionId: number]: number },
+        comments: row.comments || '',
+        timestamp: row.created_at ? new Date(row.created_at).toLocaleString() : '',
+      }));
+
+      setEmployees(employeesList);
+      setQuestions(questionsList);
+      setCategories(categoriesList.length ? categoriesList : derivedCategories);
+      setAssignments(assignmentsList);
+      setEvaluatorQuestions(evaluatorMap);
+      setEvaluations(evaluationsList);
+      setIsLoadingData(false);
+    };
+
+    loadData();
+  }, [session]);
 
   useEffect(() => {
-    localStorage.setItem('employees_db', JSON.stringify(employees));
-  }, [employees]);
+    if (!currentUser?.isAdmin && view !== 'survey') {
+      setView('survey');
+    }
+  }, [currentUser, view]);
 
-  useEffect(() => {
-    localStorage.setItem('assignments_db', JSON.stringify(assignments));
-  }, [assignments]);
+  const handlePasswordLogin = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setAuthError(null);
+    setLinkSent(false);
+    if (!emailInput.trim() || !passwordInput) {
+      setAuthError('Ingresa correo y contrasena.');
+      return;
+    }
+    setIsSigningIn(true);
+    const { error } = await supabase.auth.signInWithPassword({
+      email: emailInput.trim(),
+      password: passwordInput,
+    });
+    setIsSigningIn(false);
+    if (error) {
+      setAuthError('No se pudo iniciar sesion.');
+    }
+  };
 
-  const handleLogin = (employee: Employee) => {
-    console.log("--> [App.tsx] Login usuario:", employee.name);
-    setCurrentUser(employee);
+  const handleUpdatePassword = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setPasswordError(null);
+    if (newPassword.length < 6) {
+      setPasswordError('La contrasena debe tener al menos 6 caracteres.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('Las contrasenas no coinciden.');
+      return;
+    }
+    setIsUpdatingPassword(true);
+    const existingMetadata = session?.user?.user_metadata ?? {};
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+      data: { ...existingMetadata, must_change_password: false },
+    });
+    setIsUpdatingPassword(false);
+    if (error) {
+      setPasswordError('No se pudo actualizar la contrasena.');
+      return;
+    }
+    setNewPassword('');
+    setConfirmPassword('');
+    const { data } = await supabase.auth.getSession();
+    setSession(data.session);
+  };
+
+  const handleMagicLinkLogin = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setAuthError(null);
+    setLinkSent(false);
+    if (!emailInput.trim()) {
+      setAuthError('Ingresa tu correo corporativo.');
+      return;
+    }
+    setIsSendingLink(true);
+    const { error } = await supabase.auth.signInWithOtp({
+      email: emailInput.trim(),
+      options: {
+        emailRedirectTo: window.location.origin,
+        shouldCreateUser: false,
+      },
+    });
+    setIsSendingLink(false);
+    if (error) {
+      setAuthError('No se pudo enviar el enlace. Verifica el correo.');
+      return;
+    }
+    setLinkSent(true);
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setSelectedTargetId(null);
     setView('survey');
   };
 
-  const handleLogout = () => {
-    setCurrentUser(null);
-    setSelectedTargetId(null);
-  };
+  const handleSaveEvaluation = async (evalData: Evaluation) => {
+    const { error } = await supabase
+      .from('evaluations')
+      .upsert(
+        {
+          evaluator_id: evalData.evaluatorId,
+          evaluated_id: evalData.evaluatedId,
+          answers: evalData.answers,
+          comments: evalData.comments,
+        },
+        { onConflict: 'evaluator_id,evaluated_id' }
+      );
 
-  const handleSaveEvaluation = (evalData: Evaluation) => {
-    console.log("--> [App.tsx] Guardando evaluación");
+    if (error) {
+      alert('No se pudo guardar la evaluacion.');
+      return false;
+    }
+
     setEvaluations(prev => {
       const filtered = prev.filter(e => !(e.evaluatorId === evalData.evaluatorId && e.evaluatedId === evalData.evaluatedId));
       return [...filtered, evalData];
     });
     setSelectedTargetId(null);
+    return true;
+  };
+
+  const handleUpdateEmployee = async (id: string, updates: { name: string; role: string }) => {
+    const { error } = await supabase
+      .from('profiles')
+      .update({ name: updates.name, role: updates.role })
+      .eq('id', id);
+    if (error) {
+      alert('No se pudo actualizar el perfil.');
+      return;
+    }
+    setEmployees(prev => prev.map(emp => (emp.id === id ? { ...emp, ...updates } : emp)));
+    if (currentUser?.id === id) {
+      setCurrentUser(prev => (prev ? { ...prev, ...updates } : prev));
+    }
+  };
+
+  const handleToggleAssignment = async (evaluatorId: string, targetId: string) => {
+    const existing = assignments.find(a => a.evaluatorId === evaluatorId)?.targets.includes(targetId);
+    if (existing) {
+      const { error } = await supabase
+        .from('assignments')
+        .delete()
+        .eq('evaluator_id', evaluatorId)
+        .eq('target_id', targetId);
+      if (error) {
+        alert('No se pudo actualizar la asignacion.');
+        return;
+      }
+      setAssignments(prev => prev.map(a => (
+        a.evaluatorId === evaluatorId
+          ? { ...a, targets: a.targets.filter(tid => tid !== targetId) }
+          : a
+      )).filter(a => a.targets.length > 0));
+      return;
+    }
+
+    const { error } = await supabase.from('assignments').insert({ evaluator_id: evaluatorId, target_id: targetId });
+    if (error) {
+      alert('No se pudo actualizar la asignacion.');
+      return;
+    }
+    setAssignments(prev => {
+      const existingAssignment = prev.find(a => a.evaluatorId === evaluatorId);
+      if (existingAssignment) {
+        return prev.map(a => a.evaluatorId === evaluatorId ? { ...a, targets: [...a.targets, targetId] } : a);
+      }
+      return [...prev, { evaluatorId, targets: [targetId] }];
+    });
+  };
+
+  const handleUpdateEvaluatorQuestions = async (evaluatorId: string, questionIds: number[]) => {
+    const { error: deleteError } = await supabase
+      .from('evaluator_questions')
+      .delete()
+      .eq('evaluator_id', evaluatorId);
+    if (deleteError) {
+      alert('No se pudo actualizar las preguntas.');
+      return;
+    }
+
+    if (questionIds.length > 0) {
+      const rows = questionIds.map(questionId => ({
+        evaluator_id: evaluatorId,
+        question_id: questionId,
+      }));
+      const { error: insertError } = await supabase.from('evaluator_questions').insert(rows);
+      if (insertError) {
+        alert('No se pudo actualizar las preguntas.');
+        return;
+      }
+    }
+
+    setEvaluatorQuestions(prev => ({ ...prev, [evaluatorId]: questionIds }));
+  };
+
+  const handleAddQuestion = async (text: string, category: string) => {
+    const { data, error } = await supabase
+      .from('questions')
+      .insert({ text, category })
+      .select('id, text, category')
+      .single();
+    if (error || !data) {
+      alert('No se pudo crear la pregunta.');
+      return;
+    }
+
+    const newQuestion = data as Question;
+    setQuestions(prev => [...prev, newQuestion].sort((a, b) => a.id - b.id));
+    if (!categories.includes(category)) {
+      setCategories(prev => [...prev, category]);
+    }
+  };
+
+  const handleUpdateQuestion = async (id: number, text: string, category: string) => {
+    const { error } = await supabase.from('questions').update({ text, category }).eq('id', id);
+    if (error) {
+      alert('No se pudo actualizar la pregunta.');
+      return;
+    }
+    setQuestions(prev => prev.map(q => (q.id === id ? { ...q, text, category } : q)));
+  };
+
+  const handleDeleteQuestion = async (id: number) => {
+    const { error } = await supabase.from('questions').delete().eq('id', id);
+    if (error) {
+      alert('No se pudo eliminar la pregunta.');
+      return;
+    }
+    setQuestions(prev => prev.filter(q => q.id !== id));
+    setEvaluatorQuestions(prev => {
+      const updated: Record<string, number[]> = {};
+      Object.entries(prev).forEach(([evaluatorId, questionIds]) => {
+        updated[evaluatorId] = questionIds.filter(qid => qid !== id);
+      });
+      return updated;
+    });
+  };
+
+  const handleAddCategory = async (name: string) => {
+    const { error } = await supabase.from('question_categories').insert({ name });
+    if (error) {
+      alert('No se pudo crear la categoria.');
+      return;
+    }
+    setCategories(prev => [...prev, name]);
+  };
+
+  const handleUpdateCategory = async (prevName: string, nextName: string) => {
+    const { error } = await supabase.from('question_categories').update({ name: nextName }).eq('name', prevName);
+    if (error) {
+      alert('No se pudo actualizar la categoria.');
+      return;
+    }
+    setCategories(prev => prev.map(cat => (cat === prevName ? nextName : cat)));
+    setQuestions(prev => prev.map(q => (q.category === prevName ? { ...q, category: nextName } : q)));
+  };
+
+  const handleDeleteCategory = async (name: string, fallback: string) => {
+    const { error: updateError } = await supabase.from('questions').update({ category: fallback }).eq('category', name);
+    if (updateError) {
+      alert('No se pudo actualizar las preguntas.');
+      return;
+    }
+    const { error: deleteError } = await supabase.from('question_categories').delete().eq('name', name);
+    if (deleteError) {
+      alert('No se pudo eliminar la categoria.');
+      return;
+    }
+    setCategories(prev => prev.filter(cat => cat !== name));
+    setQuestions(prev => prev.map(q => (q.category === name ? { ...q, category: fallback } : q)));
+  };
+
+  const handleCreateUser = async (payload: { email: string; name: string; role: string; isAdmin: boolean }) => {
+    const { data, error } = await supabase.functions.invoke('admin-create-user', {
+      body: {
+        email: payload.email,
+        name: payload.name,
+        role: payload.role,
+        is_admin: payload.isAdmin,
+      },
+    });
+
+    if (error) {
+      throw new Error('No se pudo crear el usuario.');
+    }
+
+    if (!data?.profile) {
+      throw new Error('Respuesta invalida del servidor.');
+    }
+
+    const created = mapProfile(data.profile as ProfileRow);
+    setEmployees(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+    return created;
+  };
+
+  const handleResetPassword = async (userId: string) => {
+    const { error } = await supabase.functions.invoke('admin-reset-password', {
+      body: {
+        user_id: userId,
+        password: '123456',
+      },
+    });
+
+    if (error) {
+      throw new Error('No se pudo restablecer la contrasena.');
+    }
   };
 
   const exportToCSV = () => {
     if (evaluations.length === 0) return;
-    const headers = ["Evaluador", "Evaluado", ...QUESTIONS.map(q => `P${q.id}`), "Comentarios", "Fecha"];
+    if (questions.length === 0) {
+      alert("No hay preguntas configuradas.");
+      return;
+    }
+    const headers = ["Evaluador", "Evaluado", ...questions.map(q => `P${q.id}`), "Comentarios", "Fecha"];
     const rows = evaluations.map(e => {
       const evaluator = employees.find(emp => emp.id === e.evaluatorId)?.name || 'N/A';
       const evaluated = employees.find(emp => emp.id === e.evaluatedId)?.name || 'N/A';
-      const scores = QUESTIONS.map(q => e.answers[q.id] || 0);
+      const scores = questions.map(q => e.answers[q.id] || 0);
       return [evaluator, evaluated, ...scores, `"${e.comments.replace(/"/g, '""')}"`, e.timestamp].join(',');
     });
     const csvContent = [headers.join(','), ...rows].join('\n');
@@ -81,28 +509,186 @@ const App: React.FC = () => {
     link.click();
   };
 
+  const isAdmin = Boolean(currentUser?.isAdmin);
+  const questionIdsForCurrentUser = currentUser
+    ? evaluatorQuestions[currentUser.id] || questions.map(question => question.id)
+    : [];
+  const questionsForCurrentUser = questions.filter(question => questionIdsForCurrentUser.includes(question.id));
+
   const currentAssignment = currentUser ? assignments.find(a => a.evaluatorId === currentUser.id) : null;
-  const targetsToEvaluate = currentAssignment ? currentAssignment.targets.map(id => employees.find(e => e.id === id)).filter(Boolean) as Employee[] : [];
+  const targetsToEvaluate = currentAssignment
+    ? currentAssignment.targets.map(id => employees.find(e => e.id === id)).filter(Boolean) as Employee[]
+    : [];
 
-  const isAdmin = currentUser?.id === 'admin';
+  const tabs = [
+    { id: 'survey', label: 'Encuestas', icon: ClipboardList, show: true },
+    { id: 'results', label: 'Resultados', icon: LayoutDashboard, show: isAdmin },
+    { id: 'questions', label: 'Preguntas', icon: HelpCircle, show: isAdmin },
+    { id: 'admin', label: 'Administracion', icon: Settings, show: isAdmin },
+  ].filter(tab => tab.show);
 
-  if (!currentUser) {
+  const mustChangePassword = Boolean(session?.user?.user_metadata?.must_change_password);
+
+  if (isLoadingSession) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500">
+        Cargando...
+      </div>
+    );
+  }
+
+  if (!session) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-indigo-600 to-purple-700">
         <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-slate-800">Feedback 360</h1>
-            <p className="text-slate-500 mt-2">Bienvenido al portal de evaluación</p>
+            <p className="text-slate-500 mt-2">Ingresa tu correo para recibir un enlace de acceso.</p>
           </div>
-          <EmployeeSelector employees={employees} onSelect={handleLogin} />
-          <div className="mt-8 pt-6 border-t text-center">
-            <button 
-              onClick={() => { setCurrentUser({ id: 'admin', name: 'Administrador', role: 'Control Central' }); setView('admin'); }}
-              className="text-sm text-indigo-600 hover:text-indigo-800 font-medium transition-colors"
+          {authError && (
+            <div className="text-sm text-red-600 bg-red-50 border border-red-100 p-3 rounded-lg mb-4">
+              {authError}
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-2 mb-4">
+            <button
+              type="button"
+              onClick={() => { setLoginMode('link'); setAuthError(null); setLinkSent(false); }}
+              className={`py-2 rounded-lg text-sm font-semibold ${loginMode === 'link' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`}
             >
-              Acceder como Administrador
+              Enlace
+            </button>
+            <button
+              type="button"
+              onClick={() => { setLoginMode('password'); setAuthError(null); setLinkSent(false); }}
+              className={`py-2 rounded-lg text-sm font-semibold ${loginMode === 'password' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`}
+            >
+              Contrasena
             </button>
           </div>
+          {loginMode === 'link' && linkSent ? (
+            <div className="space-y-3">
+              <div className="text-sm text-emerald-600 bg-emerald-50 border border-emerald-100 p-3 rounded-lg">
+                Revisa tu correo para continuar.
+              </div>
+              <button
+                type="button"
+                onClick={() => setLinkSent(false)}
+                className="w-full border border-indigo-200 text-indigo-700 px-4 py-2 rounded-lg font-semibold"
+              >
+                Enviar otro enlace
+              </button>
+            </div>
+          ) : loginMode === 'link' ? (
+            <form onSubmit={handleMagicLinkLogin} className="space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-600">Correo corporativo</label>
+                <input
+                  type="email"
+                  value={emailInput}
+                  onChange={(event) => setEmailInput(event.target.value)}
+                  placeholder="usuario@empresa.com"
+                  className="mt-2 w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={isSendingLink}
+                className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 rounded-lg font-semibold transition-all disabled:opacity-60"
+              >
+                <Mail size={18} /> {isSendingLink ? 'Enviando...' : 'Enviar enlace'}
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handlePasswordLogin} className="space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-600">Correo corporativo</label>
+                <input
+                  type="email"
+                  value={emailInput}
+                  onChange={(event) => setEmailInput(event.target.value)}
+                  placeholder="usuario@empresa.com"
+                  className="mt-2 w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-600">Contrasena</label>
+                <input
+                  type="password"
+                  value={passwordInput}
+                  onChange={(event) => setPasswordInput(event.target.value)}
+                  placeholder="123456"
+                  className="mt-2 w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={isSigningIn}
+                className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 rounded-lg font-semibold transition-all disabled:opacity-60"
+              >
+                {isSigningIn ? 'Ingresando...' : 'Ingresar'}
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoadingData || !currentUser) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500">
+        Cargando datos...
+      </div>
+    );
+  }
+
+  if (mustChangePassword) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50">
+        <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
+          <div className="text-center mb-6">
+            <h1 className="text-2xl font-bold text-slate-800">Actualiza tu contrasena</h1>
+            <p className="text-slate-500 mt-2">Debes cambiar la contrasena inicial para continuar.</p>
+          </div>
+          {passwordError && (
+            <div className="text-sm text-red-600 bg-red-50 border border-red-100 p-3 rounded-lg mb-4">
+              {passwordError}
+            </div>
+          )}
+          <form onSubmit={handleUpdatePassword} className="space-y-4">
+            <div>
+              <label className="text-xs font-semibold text-slate-600">Nueva contrasena</label>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(event) => setNewPassword(event.target.value)}
+                className="mt-2 w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-indigo-500 outline-none"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-slate-600">Confirmar contrasena</label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                className="mt-2 w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-indigo-500 outline-none"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={isUpdatingPassword}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 rounded-lg font-semibold disabled:opacity-60"
+            >
+              {isUpdatingPassword ? 'Actualizando...' : 'Actualizar contrasena'}
+            </button>
+          </form>
+          <button
+            onClick={handleLogout}
+            className="w-full mt-4 text-sm text-slate-500 hover:text-slate-700"
+          >
+            Cerrar sesion
+          </button>
         </div>
       </div>
     );
@@ -122,34 +708,24 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          <nav className="flex items-center gap-1 sm:gap-4">
-            {!isAdmin && (
-              <button 
-                onClick={() => setView('survey')}
-                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${view === 'survey' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}
-              >
-                <ClipboardList size={18} />
-                <span className="hidden sm:inline">Encuestas</span>
-              </button>
-            )}
-            <button 
-              onClick={() => setView('results')}
-              className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${view === 'results' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}
-            >
-              <LayoutDashboard size={18} />
-              <span className="hidden sm:inline">Resultados</span>
-            </button>
-            {isAdmin && (
-              <button 
-                onClick={() => setView('admin')}
-                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${view === 'admin' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}
-              >
-                <Settings size={18} />
-                <span className="hidden sm:inline">Administración</span>
-              </button>
-            )}
-            <div className="w-px h-6 bg-slate-200 mx-2"></div>
-            <button onClick={handleLogout} className="p-2 text-slate-400 hover:text-red-600 transition-colors">
+          <nav className="flex items-center gap-3">
+            <div className="bg-slate-100 rounded-full p-1 flex items-center gap-1 overflow-x-auto">
+              {tabs.map(tab => {
+                const Icon = tab.icon;
+                const isActive = view === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setView(tab.id as 'survey' | 'results' | 'admin' | 'questions')}
+                    className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-semibold whitespace-nowrap transition-all ${isActive ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}
+                  >
+                    <Icon size={16} />
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+            <button onClick={handleLogout} className="p-2 text-slate-400 hover:text-red-600 hover:bg-slate-100 rounded-full transition-colors" aria-label="Cerrar sesion">
               <LogOut size={20} />
             </button>
           </nav>
@@ -157,13 +733,18 @@ const App: React.FC = () => {
       </header>
 
       <main className="flex-grow max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
+        {authError && (
+          <div className="mb-6 text-sm text-red-600 bg-red-50 border border-red-100 p-3 rounded-lg">
+            {authError}
+          </div>
+        )}
         {view === 'survey' && (
           <div className="space-y-8">
             {!selectedTargetId ? (
               <div className="max-w-3xl mx-auto">
                 <div className="mb-6">
-                  <h2 className="text-2xl font-bold text-slate-800">Tus Evaluaciones Pendientes</h2>
-                  <p className="text-slate-500">Compañeros asignados para calificar.</p>
+                  <h2 className="text-2xl font-bold text-slate-800">Tus evaluaciones pendientes</h2>
+                  <p className="text-slate-500">Companeros asignados para calificar.</p>
                 </div>
                 <div className="grid gap-4">
                   {targetsToEvaluate.map(target => {
@@ -190,14 +771,22 @@ const App: React.FC = () => {
                       </button>
                     );
                   })}
+                  {targetsToEvaluate.length === 0 && (
+                    <div className="text-center py-16 bg-white rounded-xl border text-slate-400">
+                      No tienes evaluaciones asignadas.
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (
               <div className="max-w-4xl mx-auto">
-                <button onClick={() => setSelectedTargetId(null)} className="mb-6 text-sm font-medium text-slate-500 hover:text-indigo-600 flex items-center gap-1">← Volver</button>
-                <EvaluationForm 
+                <button onClick={() => setSelectedTargetId(null)} className="mb-6 text-sm font-medium text-slate-500 hover:text-indigo-600 flex items-center gap-1">
+                  Volver
+                </button>
+                <EvaluationForm
                   evaluatorId={currentUser.id}
                   targetEmployee={employees.find(e => e.id === selectedTargetId)!}
+                  questions={questionsForCurrentUser}
                   onSave={handleSaveEvaluation}
                 />
               </div>
@@ -205,27 +794,45 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {view === 'results' && (
+        {view === 'results' && isAdmin && (
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div>
-                <h2 className="text-2xl font-bold text-slate-800">Panel de Resultados</h2>
-                <p className="text-slate-500">Estadísticas y análisis de desempeño.</p>
+                <h2 className="text-2xl font-bold text-slate-800">Panel de resultados</h2>
+                <p className="text-slate-500">Estadisticas y analisis de desempeno.</p>
               </div>
               <button onClick={exportToCSV} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-all" disabled={evaluations.length === 0}>
                 <Download size={18} /> Exportar CSV
               </button>
             </div>
-            <ResultsDashboard evaluations={evaluations} employees={employees} />
+            <ResultsDashboard evaluations={evaluations} employees={employees} questions={questions} />
           </div>
         )}
 
-        {view === 'admin' && (
-          <AdminPanel 
-            employees={employees} 
-            assignments={assignments} 
-            setEmployees={setEmployees} 
-            setAssignments={setAssignments} 
+        {view === 'questions' && isAdmin && (
+          <QuestionsPanel
+            questions={questions}
+            categories={categories}
+            onAddQuestion={handleAddQuestion}
+            onUpdateQuestion={handleUpdateQuestion}
+            onDeleteQuestion={handleDeleteQuestion}
+            onAddCategory={handleAddCategory}
+            onUpdateCategory={handleUpdateCategory}
+            onDeleteCategory={handleDeleteCategory}
+          />
+        )}
+
+        {view === 'admin' && isAdmin && (
+          <AdminPanel
+            employees={employees}
+            assignments={assignments}
+            questions={questions}
+            evaluatorQuestions={evaluatorQuestions}
+            onUpdateEmployee={handleUpdateEmployee}
+            onToggleAssignment={handleToggleAssignment}
+            onUpdateEvaluatorQuestions={handleUpdateEvaluatorQuestions}
+            onCreateUser={handleCreateUser}
+            onResetPassword={handleResetPassword}
           />
         )}
       </main>
