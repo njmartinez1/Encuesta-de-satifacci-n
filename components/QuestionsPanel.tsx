@@ -166,7 +166,7 @@ const QuestionsPanel: React.FC<Props> = ({
     <div className="space-y-8">
       <section className="bg-white rounded-2xl shadow-sm border p-6">
         <div className="flex items-center gap-3 mb-6">
-          <HelpCircle className="text-indigo-600" />
+          <HelpCircle className="text-[#005187]" />
           <div>
             <h2 className="text-xl font-bold text-slate-800">Preguntas</h2>
             <p className="text-sm text-slate-500">Crea y administra las preguntas activas.</p>
@@ -179,7 +179,7 @@ const QuestionsPanel: React.FC<Props> = ({
             placeholder="Texto de la pregunta"
             value={newText}
             onChange={(e) => setNewText(e.target.value)}
-            className="px-4 py-2 rounded-lg border focus:ring-2 focus:ring-indigo-500 outline-none"
+            className="px-4 py-2 rounded-lg border focus:ring-2 focus:ring-[#005187] outline-none"
           />
           <select
             value={newCategory}
@@ -193,7 +193,7 @@ const QuestionsPanel: React.FC<Props> = ({
           </select>
           <button
             onClick={addQuestion}
-            className="flex items-center justify-center gap-2 bg-indigo-600 text-white font-bold py-2 rounded-lg"
+            className="flex items-center justify-center gap-2 bg-[#005187] text-white font-bold py-2 rounded-lg"
           >
             <PlusCircle size={18} /> Agregar
           </button>
@@ -214,7 +214,7 @@ const QuestionsPanel: React.FC<Props> = ({
           <div className="divide-y">
             {questions.map(question => (
               <div key={question.id} className="py-4 flex items-start gap-4">
-                <div className="w-10 h-10 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-sm">
+                <div className="w-10 h-10 rounded-full bg-[#eef5fa] text-[#005187] flex items-center justify-center font-bold text-sm">
                   P{question.id}
                 </div>
                 <div className="flex-1">
@@ -257,7 +257,7 @@ const QuestionsPanel: React.FC<Props> = ({
                     </>
                   ) : (
                     <>
-                      <button onClick={() => startEditing(question)} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg">
+                      <button onClick={() => startEditing(question)} className="p-2 text-slate-400 hover:text-[#005187] hover:bg-[#eef5fa] rounded-lg">
                         <Edit2 size={16} />
                       </button>
                       <button onClick={() => removeQuestion(question.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg">
@@ -275,7 +275,7 @@ const QuestionsPanel: React.FC<Props> = ({
       <section className="bg-white rounded-2xl shadow-sm border p-6">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <Settings className="text-indigo-600" />
+            <Settings className="text-[#005187]" />
             <div>
               <h3 className="text-lg font-bold text-slate-800">Categorias</h3>
               <p className="text-sm text-slate-500">Agrega, edita o elimina categorias.</p>
@@ -283,7 +283,7 @@ const QuestionsPanel: React.FC<Props> = ({
           </div>
           <button
             onClick={() => setShowCategoryManager(prev => !prev)}
-            className="text-xs font-semibold text-indigo-600 hover:text-indigo-800"
+            className="text-xs font-semibold text-[#005187] hover:text-[#003a5e]"
           >
             {showCategoryManager ? 'Ocultar' : 'Gestionar'}
           </button>
@@ -301,7 +301,7 @@ const QuestionsPanel: React.FC<Props> = ({
               />
               <button
                 onClick={addCategory}
-                className="flex items-center justify-center gap-2 bg-indigo-600 text-white font-semibold py-2 rounded-lg"
+                className="flex items-center justify-center gap-2 bg-[#005187] text-white font-semibold py-2 rounded-lg"
               >
                 <PlusCircle size={16} /> Agregar categoria
               </button>
@@ -339,7 +339,7 @@ const QuestionsPanel: React.FC<Props> = ({
                         </>
                       ) : (
                         <>
-                          <button onClick={() => startCategoryEdit(category)} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg">
+                          <button onClick={() => startCategoryEdit(category)} className="p-2 text-slate-400 hover:text-[#005187] hover:bg-[#eef5fa] rounded-lg">
                             <Edit2 size={16} />
                           </button>
                           <button onClick={() => removeCategory(category)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg">
@@ -364,3 +364,4 @@ const QuestionsPanel: React.FC<Props> = ({
 };
 
 export default QuestionsPanel;
+

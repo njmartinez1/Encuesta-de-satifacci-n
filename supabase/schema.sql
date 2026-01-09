@@ -1,4 +1,4 @@
--- Supabase schema for Feedback 360
+-- Supabase schema for Encuestas Reinvented
 
 create extension if not exists "pgcrypto";
 
@@ -207,3 +207,4 @@ create policy "evaluations_admin_delete"
 on public.evaluations
 for delete
 using (public.is_allowed_email() and public.is_admin());
+

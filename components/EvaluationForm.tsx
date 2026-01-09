@@ -57,17 +57,17 @@ const EvaluationForm: React.FC<Props> = ({ evaluatorId, targetEmployee, question
 
   return (
     <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-      <div className="bg-indigo-600 p-6 text-white">
+      <div className="bg-[#005187] p-6 text-white">
         <div className="flex justify-between items-end mb-4">
           <div>
             <h2 className="text-2xl font-bold">Evaluando a {targetEmployee.name}</h2>
-            <p className="text-indigo-100 opacity-80">{targetEmployee.role}</p>
+            <p className="text-[#cfe0ea] opacity-80">{targetEmployee.role}</p>
           </div>
           <div className="text-right">
             <span className="text-3xl font-bold">{progress}%</span>
           </div>
         </div>
-        <div className="w-full bg-indigo-800 rounded-full h-2">
+        <div className="w-full bg-[#003a5e] rounded-full h-2">
           <div className="bg-emerald-400 h-2 rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
         </div>
       </div>
@@ -86,7 +86,7 @@ const EvaluationForm: React.FC<Props> = ({ evaluatorId, targetEmployee, question
                     key={score}
                     type="button"
                     onClick={() => handleScoreChange(q.id, score)}
-                    className={`flex-1 py-3 rounded-lg border-2 transition-all ${answers[q.id] === score ? 'bg-indigo-50 border-indigo-600 text-indigo-700' : 'bg-white border-slate-200'}`}
+                    className={`flex-1 py-3 rounded-lg border-2 transition-all ${answers[q.id] === score ? 'bg-[#eef5fa] border-[#005187] text-[#00406b]' : 'bg-white border-slate-200'}`}
                   >
                     {score}
                   </button>
@@ -103,7 +103,7 @@ const EvaluationForm: React.FC<Props> = ({ evaluatorId, targetEmployee, question
           rows={4}
         />
         <div className="mt-10 flex justify-end">
-          <button type="submit" disabled={isSubmitting} className="bg-indigo-600 text-white px-8 py-3 rounded-xl flex items-center gap-2">
+          <button type="submit" disabled={isSubmitting} className="bg-[#005187] text-white px-8 py-3 rounded-xl flex items-center gap-2">
             <Save size={20} /> Guardar Evaluación
           </button>
         </div>
@@ -113,3 +113,4 @@ const EvaluationForm: React.FC<Props> = ({ evaluatorId, targetEmployee, question
 };
 
 export default EvaluationForm;
+

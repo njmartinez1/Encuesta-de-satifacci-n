@@ -96,7 +96,7 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions }
       <div className="lg:col-span-1 bg-white rounded-xl shadow-sm border overflow-hidden">
         <div className="divide-y max-h-[600px] overflow-y-auto">
           {employees.map(emp => (
-            <button key={emp.id} onClick={() => setSelectedEmp(emp)} className={`w-full p-4 text-left transition-all ${selectedEmp?.id === emp.id ? 'bg-indigo-50 border-l-4 border-indigo-600' : ''}`}>
+            <button key={emp.id} onClick={() => setSelectedEmp(emp)} className={`w-full p-4 text-left transition-all ${selectedEmp?.id === emp.id ? 'bg-[#eef5fa] border-l-4 border-[#005187]' : ''}`}>
               <p className="font-semibold">{emp.name}</p>
               <p className="text-xs text-slate-500">{emp.role}</p>
             </button>
@@ -109,7 +109,7 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions }
             <div className="bg-white p-6 rounded-xl border">
               <div className="flex justify-between items-center mb-6">
                 <h3 className="font-bold flex items-center gap-2"><BarChart3 size={20} /> Rendimiento</h3>
-                <button onClick={copyChartToClipboard} className="text-indigo-600 flex items-center gap-2 text-xs font-bold"><Copy size={14} /> Copiar Imagen</button>
+                <button onClick={copyChartToClipboard} className="text-[#005187] flex items-center gap-2 text-xs font-bold"><Copy size={14} /> Copiar Imagen</button>
               </div>
               <div className="h-64" ref={chartRef}>
                 <ResponsiveContainer width="100%" height="100%">
@@ -118,15 +118,15 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions }
                     <XAxis dataKey="name" />
                     <YAxis domain={[0, 5]} />
                     <Tooltip />
-                    <Bar dataKey="avg" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="avg" fill="#005187" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
             <div className="bg-slate-900 rounded-xl p-6 text-white">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-bold flex items-center gap-2"><Sparkles size={24} className="text-indigo-400" /> Análisis IA</h3>
-                <button onClick={handleAIAnalysis} disabled={isAnalyzing} className="bg-indigo-600 px-4 py-2 rounded-lg text-sm font-bold disabled:opacity-50">
+                <h3 className="text-xl font-bold flex items-center gap-2"><Sparkles size={24} className="text-[#7aa3c0]" /> Análisis IA</h3>
+                <button onClick={handleAIAnalysis} disabled={isAnalyzing} className="bg-[#005187] px-4 py-2 rounded-lg text-sm font-bold disabled:opacity-50">
                   {isAnalyzing ? 'Analizando...' : 'Analizar'}
                 </button>
               </div>
@@ -142,3 +142,4 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions }
 };
 
 export default ResultsDashboard;
+

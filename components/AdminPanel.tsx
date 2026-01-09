@@ -121,7 +121,7 @@ const AdminPanel: React.FC<Props> = ({
     <div className="space-y-10">
       <section className="bg-white rounded-2xl shadow-sm border p-6">
         <div className="flex items-center gap-3 mb-6">
-          <Users className="text-indigo-600" />
+          <Users className="text-[#005187]" />
           <div>
             <h2 className="text-xl font-bold text-slate-800">Crear usuario</h2>
             <p className="text-sm text-slate-500">Se crea con contrasena por defecto: 123456.</p>
@@ -133,28 +133,28 @@ const AdminPanel: React.FC<Props> = ({
             placeholder="Correo"
             value={newEmail}
             onChange={(event) => setNewEmail(event.target.value)}
-            className="px-4 py-2 rounded-lg border focus:ring-2 focus:ring-indigo-500 outline-none"
+            className="px-4 py-2 rounded-lg border focus:ring-2 focus:ring-[#005187] outline-none"
           />
           <input
             type="text"
             placeholder="Nombre"
             value={newName}
             onChange={(event) => setNewName(event.target.value)}
-            className="px-4 py-2 rounded-lg border focus:ring-2 focus:ring-indigo-500 outline-none"
+            className="px-4 py-2 rounded-lg border focus:ring-2 focus:ring-[#005187] outline-none"
           />
           <input
             type="text"
             placeholder="Cargo"
             value={newRole}
             onChange={(event) => setNewRole(event.target.value)}
-            className="px-4 py-2 rounded-lg border focus:ring-2 focus:ring-indigo-500 outline-none"
+            className="px-4 py-2 rounded-lg border focus:ring-2 focus:ring-[#005187] outline-none"
           />
           <label className="flex items-center gap-2 text-sm text-slate-600">
             <input
               type="checkbox"
               checked={newIsAdmin}
               onChange={(event) => setNewIsAdmin(event.target.checked)}
-              className="h-4 w-4 text-indigo-600"
+              className="h-4 w-4 text-[#005187]"
             />
             Administrador
           </label>
@@ -169,14 +169,14 @@ const AdminPanel: React.FC<Props> = ({
             </div>
           )}
           {resetMessage && (
-            <div className="text-sm text-indigo-700 bg-indigo-50 border border-indigo-100 p-3 rounded-lg lg:col-span-2">
+            <div className="text-sm text-[#00406b] bg-[#eef5fa] border border-[#dbe9f3] p-3 rounded-lg lg:col-span-2">
               {resetMessage}
             </div>
           )}
           <button
             onClick={handleCreateUser}
             disabled={isCreating}
-            className="lg:col-span-2 bg-indigo-600 text-white font-bold py-2 rounded-lg disabled:opacity-60"
+            className="lg:col-span-2 bg-[#005187] text-white font-bold py-2 rounded-lg disabled:opacity-60"
           >
             {isCreating ? 'Creando...' : 'Crear usuario'}
           </button>
@@ -184,7 +184,7 @@ const AdminPanel: React.FC<Props> = ({
       </section>
       <section className="bg-white rounded-2xl shadow-sm border p-6">
         <div className="flex items-center gap-3 mb-4">
-          <Database className="text-indigo-600" />
+          <Database className="text-[#005187]" />
           <div>
             <h2 className="text-xl font-bold text-slate-800">Usuarios y permisos</h2>
             <p className="text-sm text-slate-500">
@@ -197,7 +197,7 @@ const AdminPanel: React.FC<Props> = ({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <section className="bg-white rounded-2xl shadow-sm border p-6">
           <div className="flex items-center gap-3 mb-6">
-            <Users className="text-indigo-600" />
+            <Users className="text-[#005187]" />
             <h2 className="text-xl font-bold text-slate-800">Gestionar plantilla</h2>
           </div>
 
@@ -224,12 +224,12 @@ const AdminPanel: React.FC<Props> = ({
                     </>
                   ) : (
                     <>
-                      <button onClick={() => startEditing(emp)} className="opacity-0 group-hover:opacity-100 p-2 text-slate-400 hover:text-indigo-600">
+                      <button onClick={() => startEditing(emp)} className="opacity-0 group-hover:opacity-100 p-2 text-slate-400 hover:text-[#005187]">
                         <Edit2 size={16}/>
                       </button>
                       <button
                         onClick={() => handleResetPassword(emp.id, emp.email)}
-                        className="opacity-0 group-hover:opacity-100 p-2 text-slate-400 hover:text-indigo-600"
+                        className="opacity-0 group-hover:opacity-100 p-2 text-slate-400 hover:text-[#005187]"
                         title="Restablecer contrasena"
                       >
                         <KeyRound size={16}/>
@@ -244,7 +244,7 @@ const AdminPanel: React.FC<Props> = ({
 
         <section className="bg-white rounded-2xl shadow-sm border p-6">
           <div className="flex items-center gap-3 mb-6">
-            <ListChecks className="text-indigo-600" />
+            <ListChecks className="text-[#005187]" />
             <h2 className="text-xl font-bold text-slate-800">Asignaciones</h2>
           </div>
           <select
@@ -279,7 +279,7 @@ const AdminPanel: React.FC<Props> = ({
       <section className="bg-white rounded-2xl shadow-sm border p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
           <div className="flex items-center gap-3">
-            <HelpCircle className="text-indigo-600" />
+            <HelpCircle className="text-[#005187]" />
             <div>
               <h2 className="text-xl font-bold text-slate-800">Preguntas que apareceran</h2>
               <p className="text-sm text-slate-500">
@@ -292,7 +292,7 @@ const AdminPanel: React.FC<Props> = ({
           <button
             onClick={() => selectedEvaluator && selectAllQuestions(selectedEvaluator)}
             disabled={!selectedEvaluator || questions.length === 0}
-            className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 disabled:text-slate-300"
+            className="text-xs font-semibold text-[#005187] hover:text-[#003a5e] disabled:text-slate-300"
           >
             Seleccionar todo
           </button>
@@ -313,13 +313,13 @@ const AdminPanel: React.FC<Props> = ({
               return (
                 <label
                   key={question.id}
-                  className={`flex items-start gap-3 p-3 rounded-xl border-2 transition-all cursor-pointer ${isActive ? 'border-indigo-500 bg-indigo-50' : 'border-slate-100 bg-slate-50'}`}
+                  className={`flex items-start gap-3 p-3 rounded-xl border-2 transition-all cursor-pointer ${isActive ? 'border-[#005187] bg-[#eef5fa]' : 'border-slate-100 bg-slate-50'}`}
                 >
                   <input
                     type="checkbox"
                     checked={isActive}
                     onChange={() => toggleQuestionForEvaluator(selectedEvaluator, question.id)}
-                    className="mt-1 h-4 w-4 text-indigo-600"
+                    className="mt-1 h-4 w-4 text-[#005187]"
                   />
                   <div className="flex-1">
                     <p className="text-sm font-medium text-slate-800">{question.text}</p>
@@ -338,3 +338,4 @@ const AdminPanel: React.FC<Props> = ({
 };
 
 export default AdminPanel;
+

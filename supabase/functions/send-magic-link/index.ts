@@ -1,0 +1,212 @@
+import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.50.1";
+
+type Template = {
+  subject: string;
+  heading: string;
+  intro: string;
+  buttonText: string;
+  footer: string;
+};
+
+const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+const serviceRoleKey =
+  Deno.env.get("SERVICE_ROLE_KEY") ??
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ??
+  "";
+const tenantId = Deno.env.get("M365_TENANT_ID") ?? "";
+const clientId = Deno.env.get("M365_CLIENT_ID") ?? "";
+const clientSecret = Deno.env.get("M365_CLIENT_SECRET") ?? "";
+const senderEmail = Deno.env.get("M365_SENDER_EMAIL") ?? "";
+const senderName = Deno.env.get("M365_SENDER_NAME") ?? "Encuestas Reinvented";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+if (!supabaseUrl || !serviceRoleKey) {
+  throw new Error("Missing SUPABASE_URL or SERVICE_ROLE_KEY.");
+}
+
+const adminClient = createClient(supabaseUrl, serviceRoleKey, {
+  auth: { persistSession: false },
+});
+
+const templates: Record<string, Template> = {
+  "reinventedpuembo.edu.ec": {
+    subject: "Acceso a Encuestas Reinvented - ReinventED Puembo",
+    heading: "Acceso a Encuestas Reinvented",
+    intro: "Usa el siguiente enlace para ingresar al sistema de evaluaciones.",
+    buttonText: "Ingresar",
+    footer: "Si no solicitaste este acceso, ignora este mensaje.",
+  },
+  "reinventedsantaclara.edu.ec": {
+    subject: "Acceso a Encuestas Reinvented",
+    heading: "Acceso a Encuestas Reinvented",
+    intro: "Haz clic en el enlace para continuar con tu evaluacion.",
+    buttonText: "Continuar",
+    footer: "Si no solicitaste este acceso, ignora este mensaje.",
+  },
+};
+
+const defaultTemplate: Template = {
+  subject: "Acceso a Encuestas Reinvented",
+  heading: "Acceso a Encuestas Reinvented",
+  intro: "Usa el siguiente enlace para ingresar al sistema.",
+  buttonText: "Ingresar",
+  footer: "Si no solicitaste este acceso, ignora este mensaje.",
+};
+
+const buildHtml = (template: Template, actionLink: string) => `
+  <div style="font-family: Arial, sans-serif; color: #0f172a; line-height: 1.6;">
+    <h2 style="margin: 0 0 12px;">${template.heading}</h2>
+    <p style="margin: 0 0 16px;">${template.intro}</p>
+    <p style="margin: 24px 0;">
+      <a href="${actionLink}" style="background:#4f46e5;color:#fff;text-decoration:none;padding:12px 18px;border-radius:8px;display:inline-block;">
+        ${template.buttonText}
+      </a>
+    </p>
+    <p style="font-size: 12px; color: #64748b;">${template.footer}</p>
+  </div>
+`;
+
+const getGraphToken = async () => {
+  const params = new URLSearchParams();
+  params.set("client_id", clientId);
+  params.set("client_secret", clientSecret);
+  params.set("grant_type", "client_credentials");
+  params.set("scope", "https://graph.microsoft.com/.default");
+
+  const response = await fetch(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: params,
+  });
+
+  const data = await response.json();
+  if (!response.ok || !data.access_token) {
+    throw new Error(data?.error_description ?? "Failed to get Graph token.");
+  }
+  return data.access_token as string;
+};
+
+const sendEmail = async (to: string, subject: string, html: string) => {
+  if (!tenantId || !clientId || !clientSecret || !senderEmail) {
+    throw new Error("Missing Microsoft 365 email configuration.");
+  }
+
+  const token = await getGraphToken();
+  const response = await fetch(
+    `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(senderEmail)}/sendMail`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        message: {
+          subject,
+          body: { contentType: "HTML", content: html },
+          from: { emailAddress: { address: senderEmail, name: senderName } },
+          toRecipients: [{ emailAddress: { address: to } }],
+        },
+        saveToSentItems: "true",
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Send mail failed: ${errorText}`);
+  }
+};
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
+  let payload: { email?: string; redirectTo?: string };
+  try {
+    payload = await req.json();
+  } catch {
+    return new Response(JSON.stringify({ error: "Invalid JSON body." }), {
+      status: 400,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  const email = (payload.email ?? "").trim().toLowerCase();
+  const redirectTo = (payload.redirectTo ?? "").trim();
+
+  if (!email) {
+    return new Response(JSON.stringify({ error: "Missing email." }), {
+      status: 400,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  const { data: allowedData, error: allowedError } = await adminClient
+    .from("allowed_emails")
+    .select("email")
+    .eq("email", email)
+    .maybeSingle();
+
+  if (allowedError) {
+    return new Response(JSON.stringify({ error: "Failed to check allowlist." }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  if (!allowedData) {
+    return new Response(JSON.stringify({ error: "Tu cuenta no tiene acceso." }), {
+      status: 403,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  const { data: linkData, error: linkError } = await adminClient.auth.admin.generateLink({
+    type: "magiclink",
+    email,
+    options: {
+      redirectTo: redirectTo || undefined,
+      shouldCreateUser: false,
+    },
+  });
+
+  if (linkError) {
+    return new Response(JSON.stringify({ error: linkError.message }), {
+      status: 400,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  const actionLink = (linkData as any)?.properties?.action_link ?? (linkData as any)?.action_link;
+  if (!actionLink) {
+    return new Response(JSON.stringify({ error: "Missing action link." }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  const domain = email.split("@")[1] ?? "";
+  const template = templates[domain] ?? defaultTemplate;
+  const html = buildHtml(template, actionLink);
+
+  try {
+    await sendEmail(email, template.subject, html);
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Failed to send email." }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  return new Response(JSON.stringify({ success: true }), {
+    status: 200,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+});

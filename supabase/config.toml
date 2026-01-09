@@ -1,0 +1,11 @@
+[functions.admin-create-user]
+verify_jwt = false
+
+[functions.admin-reset-password]
+verify_jwt = false
+
+[functions.admin-reset-all-passwords]
+verify_jwt = false
+
+[functions.send-magic-link]
+verify_jwt = false

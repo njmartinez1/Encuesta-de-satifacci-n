@@ -19,14 +19,14 @@ const EmployeeSelector: React.FC<Props> = ({ employees, onSelect }) => {
           <button
             key={employee.id}
             onClick={() => onSelect(employee)}
-            className="group flex items-center gap-4 p-4 border border-slate-200 rounded-xl hover:border-indigo-500 hover:bg-indigo-50 transition-all text-left"
+            className="group flex items-center gap-4 p-4 border border-slate-200 rounded-xl hover:border-[#005187] hover:bg-[#eef5fa] transition-all text-left"
           >
-            <div className="bg-slate-100 text-slate-500 group-hover:bg-indigo-100 group-hover:text-indigo-600 p-2 rounded-full transition-colors">
+            <div className="bg-slate-100 text-slate-500 group-hover:bg-[#dbe9f3] group-hover:text-[#005187] p-2 rounded-full transition-colors">
               <UserCircle2 size={28} />
             </div>
             <div>
               <p className="font-semibold text-slate-800">{employee.name}</p>
-              <p className="text-xs text-slate-500 group-hover:text-indigo-500">{employee.role}</p>
+              <p className="text-xs text-slate-500 group-hover:text-[#005187]">{employee.role}</p>
             </div>
           </button>
         ))}
@@ -36,3 +36,4 @@ const EmployeeSelector: React.FC<Props> = ({ employees, onSelect }) => {
 };
 
 export default EmployeeSelector;
+

@@ -6,7 +6,7 @@ import ResultsDashboard from './components/ResultsDashboard.tsx';
 import AdminPanel from './components/AdminPanel.tsx';
 import QuestionsPanel from './components/QuestionsPanel.tsx';
 import { Download, LayoutDashboard, ClipboardList, LogOut, ChevronRight, Settings, HelpCircle, Mail } from 'lucide-react';
-import { supabase } from './supabaseClient.ts';
+import { supabase, supabaseAnonKey, supabaseUrl } from './supabaseClient.ts';
 
 type ProfileRow = {
   id: string;
@@ -253,16 +253,26 @@ const App: React.FC = () => {
       return;
     }
     setIsSendingLink(true);
-    const { error } = await supabase.auth.signInWithOtp({
-      email: emailInput.trim(),
-      options: {
-        emailRedirectTo: window.location.origin,
-        shouldCreateUser: false,
+    if (!supabaseUrl || !supabaseAnonKey) {
+      setIsSendingLink(false);
+      setAuthError('Configuracion de Supabase incompleta.');
+      return;
+    }
+    const response = await fetch(`${supabaseUrl}/functions/v1/send-magic-link`, {
+      method: 'POST',
+      headers: {
+        apikey: supabaseAnonKey,
+        'Content-Type': 'application/json',
       },
+      body: JSON.stringify({
+        email: emailInput.trim(),
+        redirectTo: window.location.origin,
+      }),
     });
+    const data = await response.json().catch(() => null);
     setIsSendingLink(false);
-    if (error) {
-      setAuthError('No se pudo enviar el enlace. Verifica el correo.');
+    if (!response.ok) {
+      setAuthError(data?.error || 'No se pudo enviar el enlace. Verifica el correo.');
       return;
     }
     setLinkSent(true);
@@ -452,17 +462,29 @@ const App: React.FC = () => {
   };
 
   const handleCreateUser = async (payload: { email: string; name: string; role: string; isAdmin: boolean }) => {
-    const { data, error } = await supabase.functions.invoke('admin-create-user', {
-      body: {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+    if (!accessToken || !supabaseUrl || !supabaseAnonKey) {
+      throw new Error('Sesion no valida.');
+    }
+
+    const response = await fetch(`${supabaseUrl}/functions/v1/admin-create-user`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        apikey: supabaseAnonKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
         email: payload.email,
         name: payload.name,
         role: payload.role,
         is_admin: payload.isAdmin,
-      },
+      }),
     });
-
-    if (error) {
-      throw new Error('No se pudo crear el usuario.');
+    const data = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(data?.error || 'No se pudo crear el usuario.');
     }
 
     if (!data?.profile) {
@@ -475,16 +497,29 @@ const App: React.FC = () => {
   };
 
   const handleResetPassword = async (userId: string) => {
-    const { error } = await supabase.functions.invoke('admin-reset-password', {
-      body: {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+    if (!accessToken || !supabaseUrl || !supabaseAnonKey) {
+      throw new Error('Sesion no valida.');
+    }
+
+    const response = await fetch(`${supabaseUrl}/functions/v1/admin-reset-password`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        apikey: supabaseAnonKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
         user_id: userId,
         password: '123456',
-      },
+      }),
     });
-
-    if (error) {
-      throw new Error('No se pudo restablecer la contrasena.');
+    if (!response.ok) {
+      const data = await response.json().catch(() => null);
+      throw new Error(data?.error || 'No se pudo restablecer la contrasena.');
     }
+
   };
 
   const exportToCSV = () => {
@@ -539,10 +574,15 @@ const App: React.FC = () => {
 
   if (!session) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-indigo-600 to-purple-700">
+      <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-[#005187] to-[#003a5e]">
         <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-slate-800">Feedback 360</h1>
+            <img
+              src="/logo.svg"
+              alt="Encuestas Reinvented"
+              className="mx-auto w-40 h-auto max-w-full object-contain mb-4"
+            />
+            <h1 className="text-3xl font-bold text-slate-800">Encuestas Reinvented</h1>
             <p className="text-slate-500 mt-2">Ingresa tu correo para recibir un enlace de acceso.</p>
           </div>
           {authError && (
@@ -554,14 +594,14 @@ const App: React.FC = () => {
             <button
               type="button"
               onClick={() => { setLoginMode('link'); setAuthError(null); setLinkSent(false); }}
-              className={`py-2 rounded-lg text-sm font-semibold ${loginMode === 'link' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`}
+              className={`py-2 rounded-lg text-sm font-semibold ${loginMode === 'link' ? 'bg-[#005187] text-white' : 'bg-slate-100 text-slate-600'}`}
             >
               Enlace
             </button>
             <button
               type="button"
               onClick={() => { setLoginMode('password'); setAuthError(null); setLinkSent(false); }}
-              className={`py-2 rounded-lg text-sm font-semibold ${loginMode === 'password' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`}
+              className={`py-2 rounded-lg text-sm font-semibold ${loginMode === 'password' ? 'bg-[#005187] text-white' : 'bg-slate-100 text-slate-600'}`}
             >
               Contrasena
             </button>
@@ -574,7 +614,7 @@ const App: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setLinkSent(false)}
-                className="w-full border border-indigo-200 text-indigo-700 px-4 py-2 rounded-lg font-semibold"
+                className="w-full border border-[#c7dceb] text-[#00406b] px-4 py-2 rounded-lg font-semibold"
               >
                 Enviar otro enlace
               </button>
@@ -588,13 +628,13 @@ const App: React.FC = () => {
                   value={emailInput}
                   onChange={(event) => setEmailInput(event.target.value)}
                   placeholder="usuario@empresa.com"
-                  className="mt-2 w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-indigo-500 outline-none"
+                  className="mt-2 w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-[#005187] outline-none"
                 />
               </div>
               <button
                 type="submit"
                 disabled={isSendingLink}
-                className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 rounded-lg font-semibold transition-all disabled:opacity-60"
+                className="w-full flex items-center justify-center gap-2 bg-[#005187] hover:bg-[#00406b] text-white px-4 py-3 rounded-lg font-semibold transition-all disabled:opacity-60"
               >
                 <Mail size={18} /> {isSendingLink ? 'Enviando...' : 'Enviar enlace'}
               </button>
@@ -608,7 +648,7 @@ const App: React.FC = () => {
                   value={emailInput}
                   onChange={(event) => setEmailInput(event.target.value)}
                   placeholder="usuario@empresa.com"
-                  className="mt-2 w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-indigo-500 outline-none"
+                  className="mt-2 w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-[#005187] outline-none"
                 />
               </div>
               <div>
@@ -618,13 +658,13 @@ const App: React.FC = () => {
                   value={passwordInput}
                   onChange={(event) => setPasswordInput(event.target.value)}
                   placeholder="123456"
-                  className="mt-2 w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-indigo-500 outline-none"
+                  className="mt-2 w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-[#005187] outline-none"
                 />
               </div>
               <button
                 type="submit"
                 disabled={isSigningIn}
-                className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 rounded-lg font-semibold transition-all disabled:opacity-60"
+                className="w-full flex items-center justify-center gap-2 bg-[#005187] hover:bg-[#00406b] text-white px-4 py-3 rounded-lg font-semibold transition-all disabled:opacity-60"
               >
                 {isSigningIn ? 'Ingresando...' : 'Ingresar'}
               </button>
@@ -663,7 +703,7 @@ const App: React.FC = () => {
                 type="password"
                 value={newPassword}
                 onChange={(event) => setNewPassword(event.target.value)}
-                className="mt-2 w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-indigo-500 outline-none"
+                className="mt-2 w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-[#005187] outline-none"
               />
             </div>
             <div>
@@ -672,13 +712,13 @@ const App: React.FC = () => {
                 type="password"
                 value={confirmPassword}
                 onChange={(event) => setConfirmPassword(event.target.value)}
-                className="mt-2 w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-indigo-500 outline-none"
+                className="mt-2 w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-[#005187] outline-none"
               />
             </div>
             <button
               type="submit"
               disabled={isUpdatingPassword}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 rounded-lg font-semibold disabled:opacity-60"
+              className="w-full bg-[#005187] hover:bg-[#00406b] text-white px-4 py-3 rounded-lg font-semibold disabled:opacity-60"
             >
               {isUpdatingPassword ? 'Actualizando...' : 'Actualizar contrasena'}
             </button>
@@ -699,11 +739,15 @@ const App: React.FC = () => {
       <header className="bg-white border-b sticky top-0 z-10 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className="bg-indigo-600 text-white p-2 rounded-lg">
-              <ClipboardList size={24} />
+            <div className="bg-white p-2 rounded-lg">
+              <img
+                src="/logo.svg"
+                alt="Encuestas Reinvented"
+                className="w-28 h-auto max-w-full object-contain"
+              />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-slate-800 hidden sm:block">Feedback 360</h1>
+              <h1 className="text-lg font-bold text-slate-800 hidden sm:block">Encuestas Reinvented</h1>
               <p className="text-xs text-slate-500">{currentUser.name}</p>
             </div>
           </div>
@@ -717,7 +761,7 @@ const App: React.FC = () => {
                   <button
                     key={tab.id}
                     onClick={() => setView(tab.id as 'survey' | 'results' | 'admin' | 'questions')}
-                    className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-semibold whitespace-nowrap transition-all ${isActive ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}
+                    className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-semibold whitespace-nowrap transition-all ${isActive ? 'bg-[#005187] text-white shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}
                   >
                     <Icon size={16} />
                     {tab.label}
@@ -753,10 +797,10 @@ const App: React.FC = () => {
                       <button
                         key={target.id}
                         onClick={() => setSelectedTargetId(target.id)}
-                        className={`flex items-center justify-between p-5 rounded-xl border-2 transition-all ${isCompleted ? 'bg-emerald-50 border-emerald-100' : 'bg-white border-slate-100 hover:border-indigo-200 hover:shadow-md'}`}
+                        className={`flex items-center justify-between p-5 rounded-xl border-2 transition-all ${isCompleted ? 'bg-emerald-50 border-emerald-100' : 'bg-white border-slate-100 hover:border-[#c7dceb] hover:shadow-md'}`}
                       >
                         <div className="flex items-center gap-4 text-left">
-                          <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold ${isCompleted ? 'bg-emerald-200 text-emerald-700' : 'bg-indigo-100 text-indigo-700'}`}>
+                          <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold ${isCompleted ? 'bg-emerald-200 text-emerald-700' : 'bg-[#dbe9f3] text-[#00406b]'}`}>
                             {target.name.charAt(0)}
                           </div>
                           <div>
@@ -780,7 +824,7 @@ const App: React.FC = () => {
               </div>
             ) : (
               <div className="max-w-4xl mx-auto">
-                <button onClick={() => setSelectedTargetId(null)} className="mb-6 text-sm font-medium text-slate-500 hover:text-indigo-600 flex items-center gap-1">
+                <button onClick={() => setSelectedTargetId(null)} className="mb-6 text-sm font-medium text-slate-500 hover:text-[#005187] flex items-center gap-1">
                   Volver
                 </button>
                 <EvaluationForm
@@ -801,7 +845,7 @@ const App: React.FC = () => {
                 <h2 className="text-2xl font-bold text-slate-800">Panel de resultados</h2>
                 <p className="text-slate-500">Estadisticas y analisis de desempeno.</p>
               </div>
-              <button onClick={exportToCSV} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-all" disabled={evaluations.length === 0}>
+              <button onClick={exportToCSV} className="flex items-center gap-2 bg-[#005187] hover:bg-[#00406b] text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-all" disabled={evaluations.length === 0}>
                 <Download size={18} /> Exportar CSV
               </button>
             </div>
@@ -841,3 +885,4 @@ const App: React.FC = () => {
 };
 
 export default App;
+
