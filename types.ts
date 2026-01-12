@@ -6,16 +6,27 @@
   isAdmin: boolean;
 }
 
+export type QuestionSection = 'peer' | 'internal';
+export type QuestionType = 'scale' | 'text';
+
 export interface Question {
   id: number;
   text: string;
   category: string;
+  section: QuestionSection;
+  type: QuestionType;
+  options?: string[];
+}
+
+export interface QuestionCategory {
+  name: string;
+  section: QuestionSection;
 }
 
 export interface Evaluation {
   evaluatorId: string;
   evaluatedId: string;
-  answers: { [questionId: number]: number };
+  answers: { [questionId: number]: number | string };
   comments: string;
   timestamp: string;
 }

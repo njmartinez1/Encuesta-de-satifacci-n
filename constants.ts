@@ -17,16 +17,16 @@ export const ASSIGNMENTS: Assignment[] = [
 ];
 
 export const QUESTIONS: Question[] = [
-  { id: 1, text: 'Muestra iniciativa para resolver problemas complejos?', category: 'Tecnico' },
-  { id: 2, text: 'Se comunica de manera clara y efectiva con el equipo?', category: 'Comunicacion' },
-  { id: 3, text: 'Cumple con las entregas en los plazos acordados?', category: 'Comportamiento' },
-  { id: 4, text: 'Colabora activamente ayudando a sus companeros?', category: 'Comportamiento' },
-  { id: 5, text: 'Muestra apertura ante criticas constructivas?', category: 'Comunicacion' },
-  { id: 6, text: 'Inspira confianza y motiva a los demas?', category: 'Liderazgo' },
-  { id: 7, text: 'Demuestra dominio de las herramientas y tecnologias requeridas?', category: 'Tecnico' },
-  { id: 8, text: 'Mantiene una actitud profesional bajo presion?', category: 'Comportamiento' },
-  { id: 9, text: 'Propone ideas innovadoras para mejorar procesos?', category: 'Liderazgo' },
-  { id: 10, text: 'Es puntual y responsable en sus actividades diarias?', category: 'Comportamiento' },
+  { id: 1, text: 'Muestra iniciativa para resolver problemas complejos?', category: 'Tecnico', section: 'peer', type: 'scale' },
+  { id: 2, text: 'Se comunica de manera clara y efectiva con el equipo?', category: 'Comunicacion', section: 'peer', type: 'scale' },
+  { id: 3, text: 'Cumple con las entregas en los plazos acordados?', category: 'Comportamiento', section: 'peer', type: 'scale' },
+  { id: 4, text: 'Colabora activamente ayudando a sus companeros?', category: 'Comportamiento', section: 'peer', type: 'scale' },
+  { id: 5, text: 'Muestra apertura ante criticas constructivas?', category: 'Comunicacion', section: 'peer', type: 'scale' },
+  { id: 6, text: 'Inspira confianza y motiva a los demas?', category: 'Liderazgo', section: 'peer', type: 'scale' },
+  { id: 7, text: 'Demuestra dominio de las herramientas y tecnologias requeridas?', category: 'Tecnico', section: 'peer', type: 'scale' },
+  { id: 8, text: 'Mantiene una actitud profesional bajo presion?', category: 'Comportamiento', section: 'peer', type: 'scale' },
+  { id: 9, text: 'Propone ideas innovadoras para mejorar procesos?', category: 'Liderazgo', section: 'peer', type: 'scale' },
+  { id: 10, text: 'Es puntual y responsable en sus actividades diarias?', category: 'Comportamiento', section: 'peer', type: 'scale' },
 ];
 
 export const QUESTION_CATEGORIES = Array.from(new Set(QUESTIONS.map(question => question.category)));

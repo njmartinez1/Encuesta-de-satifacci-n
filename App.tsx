@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import { Employee, Evaluation, Assignment, Question } from './types.ts';
+import { Employee, Evaluation, Assignment, Question, QuestionCategory, QuestionSection, QuestionType } from './types.ts';
 import EvaluationForm from './components/EvaluationForm.tsx';
 import ResultsDashboard from './components/ResultsDashboard.tsx';
 import AdminPanel from './components/AdminPanel.tsx';
@@ -21,7 +21,7 @@ type EvaluatorQuestionRow = { evaluator_id: string; question_id: number };
 type EvaluationRow = {
   evaluator_id: string;
   evaluated_id: string;
-  answers: Record<string, number>;
+  answers: Record<string, number | string>;
   comments: string | null;
   created_at: string | null;
 };
@@ -41,10 +41,12 @@ const App: React.FC = () => {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
   const [questions, setQuestions] = useState<Question[]>([]);
-  const [categories, setCategories] = useState<string[]>([]);
+  const [categories, setCategories] = useState<QuestionCategory[]>([]);
   const [evaluatorQuestions, setEvaluatorQuestions] = useState<Record<string, number[]>>({});
   const [view, setView] = useState<'survey' | 'results' | 'admin' | 'questions'>('survey');
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
+  const [selectedEvaluationSection, setSelectedEvaluationSection] = useState<QuestionSection | null>(null);
+  const [selectedInternalCategory, setSelectedInternalCategory] = useState<string | null>(null);
   const [isLoadingSession, setIsLoadingSession] = useState(true);
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -122,30 +124,67 @@ const App: React.FC = () => {
 
       const [
         profilesRes,
-        questionsRes,
-        categoriesRes,
         assignmentsRes,
         evaluatorQuestionsRes,
         evaluationsRes,
       ] = await Promise.all([
         supabase.from('profiles').select('id, email, name, role, is_admin'),
-        supabase.from('questions').select('id, text, category').order('id'),
-        supabase.from('question_categories').select('name').order('name'),
         assignmentsQuery,
         evaluatorQuestionsQuery,
         evaluationsQuery,
       ]);
 
-      if (profilesRes.error || questionsRes.error || categoriesRes.error || assignmentsRes.error || evaluatorQuestionsRes.error || evaluationsRes.error) {
+      const categoriesPrimary = await supabase
+        .from('question_categories')
+        .select('name, section')
+        .order('name');
+      let categoriesData = categoriesPrimary.data;
+      let categoriesError = categoriesPrimary.error;
+      if (categoriesError) {
+        const fallback = await supabase.from('question_categories').select('name').order('name');
+        categoriesData = fallback.data;
+        categoriesError = fallback.error;
+      }
+
+      const questionsPrimary = await supabase
+        .from('questions')
+        .select('id, text, category, section, question_type, options')
+        .order('id');
+      let questionsData = questionsPrimary.data;
+      let questionsError = questionsPrimary.error;
+      if (questionsError) {
+        const fallback = await supabase.from('questions').select('id, text, category, section').order('id');
+        questionsData = fallback.data;
+        questionsError = fallback.error;
+      }
+
+      if (profilesRes.error || questionsError || categoriesError || assignmentsRes.error || evaluatorQuestionsRes.error || evaluationsRes.error) {
         setAuthError('No se pudieron cargar los datos.');
         setIsLoadingData(false);
         return;
       }
 
       const employeesList = (profilesRes.data || []).map((profile) => mapProfile(profile as ProfileRow));
-      const questionsList = (questionsRes.data || []) as Question[];
-      const categoriesList = (categoriesRes.data || []).map(row => row.name);
-      const derivedCategories = Array.from(new Set(questionsList.map(question => question.category)));
+      const questionsList = (questionsData || []).map(row => ({
+        id: row.id,
+        text: row.text,
+        category: row.category,
+        section: row.section ?? 'peer',
+        type: (row.question_type ?? 'scale') as QuestionType,
+        options: Array.isArray(row.options) ? row.options : undefined,
+      })) as Question[];
+      const categoriesList = (categoriesData || []).map(row => ({
+        name: row.name,
+        section: row.section ?? 'peer',
+      })) as QuestionCategory[];
+      const derivedCategories = Array.from(
+        new Map(
+          questionsList.map(question => [
+            `${question.category}-${question.section}`,
+            { name: question.category, section: question.section },
+          ])
+        ).values()
+      );
 
       const assignmentRows = (assignmentsRes.data || []) as AssignmentRow[];
       const assignmentsMap = new Map<string, string[]>();
@@ -174,7 +213,7 @@ const App: React.FC = () => {
       const evaluationsList = evaluationsData.map(row => ({
         evaluatorId: row.evaluator_id,
         evaluatedId: row.evaluated_id,
-        answers: (row.answers || {}) as { [questionId: number]: number },
+        answers: (row.answers || {}) as { [questionId: number]: number | string },
         comments: row.comments || '',
         timestamp: row.created_at ? new Date(row.created_at).toLocaleString() : '',
       }));
@@ -281,18 +320,70 @@ const App: React.FC = () => {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setSelectedTargetId(null);
+    setSelectedEvaluationSection(null);
+    setSelectedInternalCategory(null);
     setView('survey');
   };
 
+  const handleSurveyBack = () => {
+    if (selectedEvaluationSection === 'internal' && selectedInternalCategory) {
+      setSelectedInternalCategory(null);
+      return;
+    }
+    setSelectedTargetId(null);
+    setSelectedEvaluationSection(null);
+    setSelectedInternalCategory(null);
+  };
+
+  const formatInternalCommentBlock = (category: string | null, comment: string) => {
+    const trimmed = comment.trim();
+    if (!trimmed) return '';
+    const safeCategory = category?.trim();
+    if (safeCategory) {
+      return `[[internal|${safeCategory}]] ${trimmed}`;
+    }
+    return `[[internal]] ${trimmed}`;
+  };
+
+  const getInternalCategoriesFromAnswers = (answers: Record<number, number | string>) => {
+    const categories = new Set<string>();
+    Object.keys(answers).forEach((questionId) => {
+      const question = questions.find(item => item.id === Number(questionId));
+      if (question?.section === 'internal') {
+        categories.add(question.category);
+      }
+    });
+    return Array.from(categories);
+  };
+
   const handleSaveEvaluation = async (evalData: Evaluation) => {
+    const existingEvaluation = evaluations.find(
+      evaluation => evaluation.evaluatorId === evalData.evaluatorId && evaluation.evaluatedId === evalData.evaluatedId
+    );
+    const shouldMerge = selectedEvaluationSection === 'internal' && existingEvaluation;
+    const mergedAnswers = shouldMerge
+      ? { ...existingEvaluation.answers, ...evalData.answers }
+      : evalData.answers;
+    let existingComments = existingEvaluation?.comments?.trim() || '';
+    if (shouldMerge && existingComments && !/\[\[internal(\||\]\])/.test(existingComments)) {
+      const existingCategories = getInternalCategoriesFromAnswers(existingEvaluation.answers);
+      existingComments = formatInternalCommentBlock(existingCategories.length === 1 ? existingCategories[0] : null, existingComments);
+    }
+    const newCommentBlock = selectedEvaluationSection === 'internal'
+      ? formatInternalCommentBlock(selectedInternalCategory, evalData.comments)
+      : evalData.comments.trim();
+    const mergedComments = shouldMerge
+      ? [existingComments, newCommentBlock].filter(Boolean).join('\n\n')
+      : newCommentBlock;
+
     const { error } = await supabase
       .from('evaluations')
       .upsert(
         {
           evaluator_id: evalData.evaluatorId,
           evaluated_id: evalData.evaluatedId,
-          answers: evalData.answers,
-          comments: evalData.comments,
+          answers: mergedAnswers,
+          comments: mergedComments,
         },
         { onConflict: 'evaluator_id,evaluated_id' }
       );
@@ -304,9 +395,14 @@ const App: React.FC = () => {
 
     setEvaluations(prev => {
       const filtered = prev.filter(e => !(e.evaluatorId === evalData.evaluatorId && e.evaluatedId === evalData.evaluatedId));
-      return [...filtered, evalData];
+      return [...filtered, { ...evalData, answers: mergedAnswers, comments: mergedComments }];
     });
     setSelectedTargetId(null);
+    if (selectedEvaluationSection === 'internal') {
+      setSelectedInternalCategory(null);
+    } else {
+      setSelectedEvaluationSection(null);
+    }
     return true;
   };
 
@@ -384,31 +480,45 @@ const App: React.FC = () => {
     setEvaluatorQuestions(prev => ({ ...prev, [evaluatorId]: questionIds }));
   };
 
-  const handleAddQuestion = async (text: string, category: string) => {
+  const handleAddQuestion = async (text: string, category: string, section: QuestionSection, type: QuestionType, options: string[]) => {
     const { data, error } = await supabase
       .from('questions')
-      .insert({ text, category })
-      .select('id, text, category')
+      .insert({ text, category, section, question_type: type, options: type === 'scale' ? options : null })
+      .select('id, text, category, section, question_type, options')
       .single();
     if (error || !data) {
       alert('No se pudo crear la pregunta.');
       return;
     }
 
-    const newQuestion = data as Question;
+    const newQuestion = {
+      id: data.id,
+      text: data.text,
+      category: data.category,
+      section: data.section ?? section,
+      type: (data.question_type ?? type) as QuestionType,
+      options: Array.isArray(data.options) ? data.options : (type === 'scale' ? options : undefined),
+    } as Question;
     setQuestions(prev => [...prev, newQuestion].sort((a, b) => a.id - b.id));
-    if (!categories.includes(category)) {
-      setCategories(prev => [...prev, category]);
+    if (!categories.some(cat => cat.name === category)) {
+      setCategories(prev => [...prev, { name: category, section }]);
     }
   };
 
-  const handleUpdateQuestion = async (id: number, text: string, category: string) => {
-    const { error } = await supabase.from('questions').update({ text, category }).eq('id', id);
+  const handleUpdateQuestion = async (id: number, text: string, category: string, section: QuestionSection, type: QuestionType, options: string[]) => {
+    const { error } = await supabase
+      .from('questions')
+      .update({ text, category, section, question_type: type, options: type === 'scale' ? options : null })
+      .eq('id', id);
     if (error) {
       alert('No se pudo actualizar la pregunta.');
       return;
     }
-    setQuestions(prev => prev.map(q => (q.id === id ? { ...q, text, category } : q)));
+    setQuestions(prev => prev.map(q => (
+      q.id === id
+        ? { ...q, text, category, section, type, options: type === 'scale' ? options : undefined }
+        : q
+    )));
   };
 
   const handleDeleteQuestion = async (id: number) => {
@@ -427,13 +537,13 @@ const App: React.FC = () => {
     });
   };
 
-  const handleAddCategory = async (name: string) => {
-    const { error } = await supabase.from('question_categories').insert({ name });
+  const handleAddCategory = async (name: string, section: QuestionSection) => {
+    const { error } = await supabase.from('question_categories').insert({ name, section });
     if (error) {
       alert('No se pudo crear la categoria.');
       return;
     }
-    setCategories(prev => [...prev, name]);
+    setCategories(prev => [...prev, { name, section }]);
   };
 
   const handleUpdateCategory = async (prevName: string, nextName: string) => {
@@ -442,7 +552,7 @@ const App: React.FC = () => {
       alert('No se pudo actualizar la categoria.');
       return;
     }
-    setCategories(prev => prev.map(cat => (cat === prevName ? nextName : cat)));
+    setCategories(prev => prev.map(cat => (cat.name === prevName ? { ...cat, name: nextName } : cat)));
     setQuestions(prev => prev.map(q => (q.category === prevName ? { ...q, category: nextName } : q)));
   };
 
@@ -457,7 +567,7 @@ const App: React.FC = () => {
       alert('No se pudo eliminar la categoria.');
       return;
     }
-    setCategories(prev => prev.filter(cat => cat !== name));
+    setCategories(prev => prev.filter(cat => cat.name !== name));
     setQuestions(prev => prev.map(q => (q.category === name ? { ...q, category: fallback } : q)));
   };
 
@@ -532,7 +642,12 @@ const App: React.FC = () => {
     const rows = evaluations.map(e => {
       const evaluator = employees.find(emp => emp.id === e.evaluatorId)?.name || 'N/A';
       const evaluated = employees.find(emp => emp.id === e.evaluatedId)?.name || 'N/A';
-      const scores = questions.map(q => e.answers[q.id] || 0);
+      const scores = questions.map(q => {
+        const value = e.answers[q.id];
+        if (typeof value === 'number') return value;
+        if (typeof value === 'string') return `"${value.replace(/"/g, '""')}"`;
+        return '';
+      });
       return [evaluator, evaluated, ...scores, `"${e.comments.replace(/"/g, '""')}"`, e.timestamp].join(',');
     });
     const csvContent = [headers.join(','), ...rows].join('\n');
@@ -549,6 +664,40 @@ const App: React.FC = () => {
     ? evaluatorQuestions[currentUser.id] || questions.map(question => question.id)
     : [];
   const questionsForCurrentUser = questions.filter(question => questionIdsForCurrentUser.includes(question.id));
+  const peerQuestionsForCurrentUser = questionsForCurrentUser.filter(question => question.section === 'peer');
+  const internalQuestionsForCurrentUser = questionsForCurrentUser.filter(question => question.section === 'internal');
+  const internalCategories = Array.from(
+    new Set(internalQuestionsForCurrentUser.map(question => question.category))
+  ).sort((a, b) => a.localeCompare(b));
+  const internalQuestionsForSelectedCategory = selectedInternalCategory
+    ? internalQuestionsForCurrentUser.filter(question => question.category === selectedInternalCategory)
+    : [];
+  const internalQuestionIds = internalQuestionsForCurrentUser.map(question => question.id);
+  const internalEvaluation = currentUser
+    ? evaluations.find(e => e.evaluatorId === currentUser.id && e.evaluatedId === currentUser.id)
+    : null;
+  const hasAnswer = (question: Question, value: number | string | undefined) => {
+    if (question.type === 'text') {
+      return typeof value === 'string' && value.trim().length > 0;
+    }
+    return typeof value === 'number';
+  };
+  const internalEvaluationCompleted = Boolean(
+    internalEvaluation
+    && internalQuestionIds.length > 0
+    && internalQuestionsForCurrentUser.every(question => hasAnswer(question, internalEvaluation.answers[question.id]))
+  );
+  const getInternalCategoryStats = (category: string) => {
+    const categoryQuestions = internalQuestionsForCurrentUser.filter(question => question.category === category);
+    const answered = internalEvaluation
+      ? categoryQuestions.filter(question => hasAnswer(question, internalEvaluation.answers[question.id])).length
+      : 0;
+    return {
+      total: categoryQuestions.length,
+      answered,
+      completed: categoryQuestions.length > 0 && answered === categoryQuestions.length,
+    };
+  };
 
   const currentAssignment = currentUser ? assignments.find(a => a.evaluatorId === currentUser.id) : null;
   const targetsToEvaluate = currentAssignment
@@ -603,7 +752,7 @@ const App: React.FC = () => {
               onClick={() => { setLoginMode('password'); setAuthError(null); setLinkSent(false); }}
               className={`py-2 rounded-lg text-sm font-semibold ${loginMode === 'password' ? 'bg-[#005187] text-white' : 'bg-slate-100 text-slate-600'}`}
             >
-              Contrasena
+              Contraseña
             </button>
           </div>
           {loginMode === 'link' && linkSent ? (
@@ -652,7 +801,7 @@ const App: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="text-xs font-semibold text-slate-600">Contrasena</label>
+                <label className="text-xs font-semibold text-slate-600">Contraseña</label>
                 <input
                   type="password"
                   value={passwordInput}
@@ -784,55 +933,152 @@ const App: React.FC = () => {
         )}
         {view === 'survey' && (
           <div className="space-y-8">
-            {!selectedTargetId ? (
-              <div className="max-w-3xl mx-auto">
-                <div className="mb-6">
+            {!selectedEvaluationSection ? (
+              <div className="max-w-3xl mx-auto space-y-8">
+                <div>
                   <h2 className="text-2xl font-bold text-slate-800">Tus evaluaciones pendientes</h2>
-                  <p className="text-slate-500">Companeros asignados para calificar.</p>
+                  <p className="text-slate-500">Selecciona la seccion que deseas completar.</p>
                 </div>
-                <div className="grid gap-4">
-                  {targetsToEvaluate.map(target => {
-                    const isCompleted = evaluations.some(e => e.evaluatorId === currentUser.id && e.evaluatedId === target.id);
-                    return (
-                      <button
-                        key={target.id}
-                        onClick={() => setSelectedTargetId(target.id)}
-                        className={`flex items-center justify-between p-5 rounded-xl border-2 transition-all ${isCompleted ? 'bg-emerald-50 border-emerald-100' : 'bg-white border-slate-100 hover:border-[#c7dceb] hover:shadow-md'}`}
-                      >
-                        <div className="flex items-center gap-4 text-left">
-                          <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold ${isCompleted ? 'bg-emerald-200 text-emerald-700' : 'bg-[#dbe9f3] text-[#00406b]'}`}>
-                            {target.name.charAt(0)}
-                          </div>
-                          <div>
-                            <h3 className="font-semibold text-slate-800">{target.name}</h3>
-                            <p className="text-sm text-slate-500">{target.role}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          {isCompleted && <span className="text-xs font-bold uppercase text-emerald-600 bg-emerald-100 px-2 py-1 rounded">Completado</span>}
-                          <ChevronRight className={isCompleted ? 'text-emerald-400' : 'text-slate-300'} />
-                        </div>
-                      </button>
-                    );
-                  })}
-                  {targetsToEvaluate.length === 0 && (
-                    <div className="text-center py-16 bg-white rounded-xl border text-slate-400">
-                      No tienes evaluaciones asignadas.
+
+                {internalQuestionsForCurrentUser.length > 0 && (
+                  <div>
+                    <div className="mb-4">
+                      <h3 className="text-lg font-semibold text-slate-800">Satisfaccion interna</h3>
+                      <p className="text-sm text-slate-500">Evalua la institucion y las condiciones internas.</p>
                     </div>
-                  )}
+                    <button
+                      onClick={() => {
+                        setSelectedEvaluationSection('internal');
+                        setSelectedInternalCategory(null);
+                        setSelectedTargetId(null);
+                      }}
+                      className={`flex items-center justify-between w-full p-5 rounded-xl border-2 transition-all ${internalEvaluationCompleted ? 'bg-emerald-50 border-emerald-100' : 'bg-white border-slate-100 hover:border-[#c7dceb] hover:shadow-md'}`}
+                    >
+                      <div className="flex items-center gap-4 text-left">
+                        <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold ${internalEvaluationCompleted ? 'bg-emerald-200 text-emerald-700' : 'bg-[#dbe9f3] text-[#00406b]'}`}>
+                          SI
+                        </div>
+                        <div>
+                          <h4 className="font-semibold text-slate-800">Satisfaccion interna</h4>
+                          <p className="text-sm text-slate-500">Encuesta institucional</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {internalEvaluationCompleted && <span className="text-xs font-bold uppercase text-emerald-600 bg-emerald-100 px-2 py-1 rounded">Completado</span>}
+                        <ChevronRight className={internalEvaluationCompleted ? 'text-emerald-400' : 'text-slate-300'} />
+                      </div>
+                    </button>
+                  </div>
+                )}
+
+                <div>
+                  <div className="mb-4">
+                    <h3 className="text-lg font-semibold text-slate-800">Evaluacion de pares</h3>
+                    <p className="text-sm text-slate-500">Companeros asignados para calificar.</p>
+                  </div>
+                  <div className="grid gap-4">
+                    {peerQuestionsForCurrentUser.length === 0 ? (
+                      <div className="text-center py-12 bg-white rounded-xl border text-slate-400">
+                        No hay preguntas para evaluacion de pares configuradas.
+                      </div>
+                    ) : (
+                      <>
+                        {targetsToEvaluate.map(target => {
+                          const isCompleted = evaluations.some(e => e.evaluatorId === currentUser.id && e.evaluatedId === target.id);
+                          return (
+                            <button
+                              key={target.id}
+                              onClick={() => {
+                                setSelectedEvaluationSection('peer');
+                                setSelectedInternalCategory(null);
+                                setSelectedTargetId(target.id);
+                              }}
+                              className={`flex items-center justify-between p-5 rounded-xl border-2 transition-all ${isCompleted ? 'bg-emerald-50 border-emerald-100' : 'bg-white border-slate-100 hover:border-[#c7dceb] hover:shadow-md'}`}
+                            >
+                              <div className="flex items-center gap-4 text-left">
+                                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold ${isCompleted ? 'bg-emerald-200 text-emerald-700' : 'bg-[#dbe9f3] text-[#00406b]'}`}>
+                                  {target.name.charAt(0)}
+                                </div>
+                                <div>
+                                  <h3 className="font-semibold text-slate-800">{target.name}</h3>
+                                  <p className="text-sm text-slate-500">{target.role}</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                {isCompleted && <span className="text-xs font-bold uppercase text-emerald-600 bg-emerald-100 px-2 py-1 rounded">Completado</span>}
+                                <ChevronRight className={isCompleted ? 'text-emerald-400' : 'text-slate-300'} />
+                              </div>
+                            </button>
+                          );
+                        })}
+                        {targetsToEvaluate.length === 0 && (
+                          <div className="text-center py-16 bg-white rounded-xl border text-slate-400">
+                            No tienes evaluaciones asignadas.
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             ) : (
               <div className="max-w-4xl mx-auto">
-                <button onClick={() => setSelectedTargetId(null)} className="mb-6 text-sm font-medium text-slate-500 hover:text-[#005187] flex items-center gap-1">
+                <button
+                  onClick={handleSurveyBack}
+                  className="mb-6 text-sm font-medium text-slate-500 hover:text-[#005187] flex items-center gap-1"
+                >
                   Volver
                 </button>
-                <EvaluationForm
-                  evaluatorId={currentUser.id}
-                  targetEmployee={employees.find(e => e.id === selectedTargetId)!}
-                  questions={questionsForCurrentUser}
-                  onSave={handleSaveEvaluation}
-                />
+                {selectedEvaluationSection === 'internal' && !selectedInternalCategory ? (
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="text-lg font-semibold text-slate-800">Categorias de satisfaccion interna</h3>
+                      <p className="text-sm text-slate-500">Selecciona el area que deseas evaluar.</p>
+                    </div>
+                    <div className="grid gap-4">
+                      {internalCategories.length === 0 ? (
+                        <div className="text-center py-12 bg-white rounded-xl border text-slate-400">
+                          No hay categorias configuradas para satisfaccion interna.
+                        </div>
+                      ) : (
+                        internalCategories.map(category => {
+                          const stats = getInternalCategoryStats(category);
+                          const badge = category.trim().charAt(0).toUpperCase() || 'I';
+                          return (
+                            <button
+                              key={category}
+                              onClick={() => setSelectedInternalCategory(category)}
+                              className={`flex items-center justify-between p-5 rounded-xl border-2 transition-all ${stats.completed ? 'bg-emerald-50 border-emerald-100' : 'bg-white border-slate-100 hover:border-[#c7dceb] hover:shadow-md'}`}
+                            >
+                              <div className="flex items-center gap-4 text-left">
+                                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold ${stats.completed ? 'bg-emerald-200 text-emerald-700' : 'bg-[#dbe9f3] text-[#00406b]'}`}>
+                                  {badge}
+                                </div>
+                                <div>
+                                  <h4 className="font-semibold text-slate-800">{category}</h4>
+                                  <p className="text-sm text-slate-500">{stats.answered}/{stats.total} respondidas</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                {stats.completed && <span className="text-xs font-bold uppercase text-emerald-600 bg-emerald-100 px-2 py-1 rounded">Completado</span>}
+                                <ChevronRight className={stats.completed ? 'text-emerald-400' : 'text-slate-300'} />
+                              </div>
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <EvaluationForm
+                    evaluatorId={currentUser.id}
+                    targetEmployee={selectedEvaluationSection === 'internal'
+                      ? { ...currentUser, name: 'Institucion', role: `Satisfaccion interna${selectedInternalCategory ? ` - ${selectedInternalCategory}` : ''}` }
+                      : employees.find(e => e.id === selectedTargetId)!}
+                    questions={selectedEvaluationSection === 'internal' ? internalQuestionsForSelectedCategory : peerQuestionsForCurrentUser}
+                    onSave={handleSaveEvaluation}
+                  />
+                )}
               </div>
             )}
           </div>
@@ -885,4 +1131,3 @@ const App: React.FC = () => {
 };
 
 export default App;
-

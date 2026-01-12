@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Employee, Assignment, Question } from '../types.ts';
+import { Employee, Assignment, Question, QuestionSection } from '../types.ts';
 import { Users, ListChecks, CheckCircle2, Edit2, X, Check, Database, HelpCircle, KeyRound } from 'lucide-react';
 
 interface Props {
@@ -14,6 +14,11 @@ interface Props {
   onResetPassword: (id: string) => Promise<void>;
 }
 
+const QUESTION_SECTIONS: { value: QuestionSection; label: string }[] = [
+  { value: 'peer', label: 'Evaluacion de pares' },
+  { value: 'internal', label: 'Satisfaccion interna' },
+];
+
 const AdminPanel: React.FC<Props> = ({
   employees,
   assignments,
@@ -26,6 +31,7 @@ const AdminPanel: React.FC<Props> = ({
   onResetPassword,
 }) => {
   const [selectedEvaluator, setSelectedEvaluator] = useState<string | null>(null);
+  const [selectedQuestionSection, setSelectedQuestionSection] = useState<QuestionSection>('peer');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editRole, setEditRole] = useState('');
@@ -106,7 +112,12 @@ const AdminPanel: React.FC<Props> = ({
   };
 
   const selectAllQuestions = async (evaluatorId: string) => {
-    await onUpdateEvaluatorQuestions(evaluatorId, questions.map(question => question.id));
+    const current = evaluatorQuestions[evaluatorId] || [];
+    const sectionQuestionIds = questions
+      .filter(question => question.section === selectedQuestionSection)
+      .map(question => question.id);
+    const updated = Array.from(new Set([...current, ...sectionQuestionIds]));
+    await onUpdateEvaluatorQuestions(evaluatorId, updated);
   };
 
   const toggleAssignment = async (evaluatorId: string, targetId: string) => {
@@ -116,6 +127,9 @@ const AdminPanel: React.FC<Props> = ({
   const selectedQuestionIds = selectedEvaluator
     ? (evaluatorQuestions[selectedEvaluator] || [])
     : [];
+  const questionsForSection = questions.filter(question => question.section === selectedQuestionSection);
+  const selectedCount = questionsForSection.filter(question => selectedQuestionIds.includes(question.id)).length;
+  const selectedSectionLabel = QUESTION_SECTIONS.find(option => option.value === selectedQuestionSection)?.label || '';
 
   return (
     <div className="space-y-10">
@@ -284,23 +298,35 @@ const AdminPanel: React.FC<Props> = ({
               <h2 className="text-xl font-bold text-slate-800">Preguntas que apareceran</h2>
               <p className="text-sm text-slate-500">
                 {selectedEvaluator
-                  ? `${selectedQuestionIds.length}/${questions.length} seleccionadas`
+                  ? `${selectedCount}/${questionsForSection.length} seleccionadas en ${selectedSectionLabel.toLowerCase()}`
                   : 'Selecciona el evaluador en Asignaciones para ver sus preguntas.'}
               </p>
             </div>
           </div>
-          <button
-            onClick={() => selectedEvaluator && selectAllQuestions(selectedEvaluator)}
-            disabled={!selectedEvaluator || questions.length === 0}
-            className="text-xs font-semibold text-[#005187] hover:text-[#003a5e] disabled:text-slate-300"
-          >
-            Seleccionar todo
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {QUESTION_SECTIONS.map(section => (
+              <button
+                key={section.value}
+                type="button"
+                onClick={() => setSelectedQuestionSection(section.value)}
+                className={`px-3 py-2 rounded-full text-xs font-semibold ${selectedQuestionSection === section.value ? 'bg-[#005187] text-white shadow-sm' : 'bg-slate-100 text-slate-600'}`}
+              >
+                {section.label}
+              </button>
+            ))}
+            <button
+              onClick={() => selectedEvaluator && selectAllQuestions(selectedEvaluator)}
+              disabled={!selectedEvaluator || questionsForSection.length === 0}
+              className="text-xs font-semibold text-[#005187] hover:text-[#003a5e] disabled:text-slate-300"
+            >
+              Seleccionar todo
+            </button>
+          </div>
         </div>
 
-        {questions.length === 0 ? (
+        {questionsForSection.length === 0 ? (
           <div className="text-sm text-slate-400 bg-slate-50 border border-dashed rounded-xl p-6 text-center">
-            No hay preguntas configuradas.
+            No hay preguntas configuradas para {selectedSectionLabel.toLowerCase()}.
           </div>
         ) : !selectedEvaluator ? (
           <div className="text-sm text-slate-400 bg-slate-50 border border-dashed rounded-xl p-6 text-center">
@@ -308,7 +334,7 @@ const AdminPanel: React.FC<Props> = ({
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[420px] overflow-y-auto">
-            {questions.map(question => {
+            {questionsForSection.map(question => {
               const isActive = selectedQuestionIds.includes(question.id);
               return (
                 <label
