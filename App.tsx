@@ -729,7 +729,7 @@ const App: React.FC = () => {
         <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
           <div className="text-center mb-8">
             <img
-              src="/logo.svg"
+              src={`${import.meta.env.BASE_URL}logo.svg`}
               alt="Encuestas Reinvented"
               className="mx-auto w-40 h-auto max-w-full object-contain mb-4"
             />
@@ -892,7 +892,7 @@ const App: React.FC = () => {
           <div className="flex items-center gap-4">
             <div className="bg-white p-2 rounded-lg">
               <img
-                src="/logo.svg"
+                src={`${import.meta.env.BASE_URL}logo.svg`}
                 alt="Encuestas Reinvented"
                 className="w-28 h-auto max-w-full object-contain"
               />
