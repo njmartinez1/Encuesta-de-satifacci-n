@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Employee, Assignment, Question, QuestionSection } from '../types.ts';
 import { Users, ListChecks, CheckCircle2, Edit2, X, Check, Database, HelpCircle, KeyRound } from 'lucide-react';
+import { useModal } from './ModalProvider.tsx';
 
 interface Props {
   employees: Employee[];
@@ -30,6 +31,7 @@ const AdminPanel: React.FC<Props> = ({
   onCreateUser,
   onResetPassword,
 }) => {
+  const { showConfirm } = useModal();
   const [selectedEvaluator, setSelectedEvaluator] = useState<string | null>(null);
   const [selectedQuestionSection, setSelectedQuestionSection] = useState<QuestionSection>('peer');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -94,7 +96,12 @@ const AdminPanel: React.FC<Props> = ({
     setCreateError(null);
     setCreateSuccess(null);
     setResetMessage(null);
-    if (!confirm(`Se restablecera la contrasena de ${email} a 123456. Continuar?`)) return;
+    const confirmed = await showConfirm(`Se restablecera la contrasena de ${email} a 123456. Continuar?`, {
+      title: 'Restablecer contrasena',
+      confirmLabel: 'Continuar',
+      variant: 'warning',
+    });
+    if (!confirmed) return;
     try {
       await onResetPassword(id);
       setResetMessage(`Contrasena restablecida: ${email}`);

@@ -2,6 +2,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.tsx';
+import { ModalProvider } from './components/ModalProvider.tsx';
 
 console.log("--> [index.tsx] Iniciando carga del punto de entrada");
 
@@ -16,7 +17,9 @@ try {
   
   root.render(
     <React.StrictMode>
-      <App />
+      <ModalProvider>
+        <App />
+      </ModalProvider>
     </React.StrictMode>
   );
   console.log("--> [index.tsx] Render inicial disparado correctamente");

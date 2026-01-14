@@ -142,6 +142,7 @@ drop policy if exists evaluator_questions_select_own_or_admin on public.evaluato
 drop policy if exists evaluator_questions_admin_all on public.evaluator_questions;
 drop policy if exists evaluations_select_own_or_admin on public.evaluations;
 drop policy if exists evaluations_insert_own on public.evaluations;
+drop policy if exists evaluations_update_own on public.evaluations;
 drop policy if exists evaluations_admin_update on public.evaluations;
 drop policy if exists evaluations_admin_delete on public.evaluations;
 
@@ -231,6 +232,12 @@ using (public.is_allowed_email() and (public.is_admin() or evaluator_id = (selec
 create policy "evaluations_insert_own"
 on public.evaluations
 for insert
+with check (public.is_allowed_email() and evaluator_id = (select auth.uid()));
+
+create policy "evaluations_update_own"
+on public.evaluations
+for update
+using (public.is_allowed_email() and evaluator_id = (select auth.uid()))
 with check (public.is_allowed_email() and evaluator_id = (select auth.uid()));
 
 create policy "evaluations_admin_update"

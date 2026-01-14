@@ -4,6 +4,7 @@ import { Evaluation, Employee, Question } from '../types.ts';
 import { analyzeEvaluations } from '../geminiService.ts';
 import { Sparkles, BarChart3, TrendingUp, Copy } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { useModal } from './ModalProvider.tsx';
 
 interface Props {
   evaluations: Evaluation[];
@@ -12,6 +13,7 @@ interface Props {
 }
 
 const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions }) => {
+  const { showAlert } = useModal();
   const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null);
   const [viewMode, setViewMode] = useState<'employee' | 'general'>('employee');
   const [selectedInternalCategory, setSelectedInternalCategory] = useState('');
@@ -279,7 +281,7 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions }
     const svg = containerRef.current.querySelector('svg');
     if (!svg) return;
     if (!navigator.clipboard || typeof ClipboardItem === 'undefined') {
-      window.alert('Tu navegador no permite copiar imagenes al portapapeles.');
+      showAlert('Tu navegador no permite copiar imagenes al portapapeles.');
       return;
     }
     const svgData = new XMLSerializer().serializeToString(svg);
@@ -301,10 +303,10 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions }
           try {
             await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
           } catch (error) {
-            window.alert('No se pudo copiar la imagen.');
+            showAlert('No se pudo copiar la imagen.');
           }
         } else {
-          window.alert('No se pudo generar la imagen.');
+          showAlert('No se pudo generar la imagen.');
         }
       }
       URL.revokeObjectURL(url);

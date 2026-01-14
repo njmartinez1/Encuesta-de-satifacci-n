@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { Employee, Evaluation, Question } from '../types.ts';
 import { Save } from 'lucide-react';
+import { useModal } from './ModalProvider.tsx';
 
 console.log("--> [EvaluationForm.tsx] Módulo cargado");
 
@@ -13,6 +14,7 @@ interface Props {
 }
 
 const EvaluationForm: React.FC<Props> = ({ evaluatorId, targetEmployee, questions, onSave }) => {
+  const { showAlert } = useModal();
   const [answers, setAnswers] = useState<{ [key: number]: number | string }>({});
   const [comments, setComments] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -24,7 +26,7 @@ const EvaluationForm: React.FC<Props> = ({ evaluatorId, targetEmployee, question
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (questions.length === 0) {
-      alert("No hay preguntas asignadas para este evaluador.");
+      showAlert("No hay preguntas asignadas para este evaluador.");
       return;
     }
     const hasAllAnswers = questions.every(question => {
@@ -35,7 +37,7 @@ const EvaluationForm: React.FC<Props> = ({ evaluatorId, targetEmployee, question
       return typeof value === 'number';
     });
     if (!hasAllAnswers) {
-      alert("Por favor, responde todas las preguntas antes de continuar.");
+      showAlert("Por favor, responde todas las preguntas antes de continuar.");
       return;
     }
 

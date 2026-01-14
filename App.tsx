@@ -7,6 +7,7 @@ import AdminPanel from './components/AdminPanel.tsx';
 import QuestionsPanel from './components/QuestionsPanel.tsx';
 import { Download, LayoutDashboard, ClipboardList, LogOut, ChevronRight, Settings, HelpCircle, Mail } from 'lucide-react';
 import { supabase, supabaseAnonKey, supabaseUrl } from './supabaseClient.ts';
+import { useModal } from './components/ModalProvider.tsx';
 
 type ProfileRow = {
   id: string;
@@ -35,6 +36,7 @@ const mapProfile = (profile: ProfileRow): Employee => ({
 });
 
 const App: React.FC = () => {
+  const { showAlert } = useModal();
   const [session, setSession] = useState<Session | null>(null);
   const [currentUser, setCurrentUser] = useState<Employee | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -389,7 +391,7 @@ const App: React.FC = () => {
       );
 
     if (error) {
-      alert('No se pudo guardar la evaluacion.');
+      showAlert('No se pudo guardar la evaluacion.');
       return false;
     }
 
@@ -412,7 +414,7 @@ const App: React.FC = () => {
       .update({ name: updates.name, role: updates.role })
       .eq('id', id);
     if (error) {
-      alert('No se pudo actualizar el perfil.');
+      showAlert('No se pudo actualizar el perfil.');
       return;
     }
     setEmployees(prev => prev.map(emp => (emp.id === id ? { ...emp, ...updates } : emp)));
@@ -430,7 +432,7 @@ const App: React.FC = () => {
         .eq('evaluator_id', evaluatorId)
         .eq('target_id', targetId);
       if (error) {
-        alert('No se pudo actualizar la asignacion.');
+        showAlert('No se pudo actualizar la asignacion.');
         return;
       }
       setAssignments(prev => prev.map(a => (
@@ -443,7 +445,7 @@ const App: React.FC = () => {
 
     const { error } = await supabase.from('assignments').insert({ evaluator_id: evaluatorId, target_id: targetId });
     if (error) {
-      alert('No se pudo actualizar la asignacion.');
+      showAlert('No se pudo actualizar la asignacion.');
       return;
     }
     setAssignments(prev => {
@@ -461,7 +463,7 @@ const App: React.FC = () => {
       .delete()
       .eq('evaluator_id', evaluatorId);
     if (deleteError) {
-      alert('No se pudo actualizar las preguntas.');
+      showAlert('No se pudo actualizar las preguntas.');
       return;
     }
 
@@ -472,7 +474,7 @@ const App: React.FC = () => {
       }));
       const { error: insertError } = await supabase.from('evaluator_questions').insert(rows);
       if (insertError) {
-        alert('No se pudo actualizar las preguntas.');
+        showAlert('No se pudo actualizar las preguntas.');
         return;
       }
     }
@@ -487,7 +489,7 @@ const App: React.FC = () => {
       .select('id, text, category, section, question_type, options')
       .single();
     if (error || !data) {
-      alert('No se pudo crear la pregunta.');
+      showAlert('No se pudo crear la pregunta.');
       return;
     }
 
@@ -511,7 +513,7 @@ const App: React.FC = () => {
       .update({ text, category, section, question_type: type, options: type === 'scale' ? options : null })
       .eq('id', id);
     if (error) {
-      alert('No se pudo actualizar la pregunta.');
+      showAlert('No se pudo actualizar la pregunta.');
       return;
     }
     setQuestions(prev => prev.map(q => (
@@ -524,7 +526,7 @@ const App: React.FC = () => {
   const handleDeleteQuestion = async (id: number) => {
     const { error } = await supabase.from('questions').delete().eq('id', id);
     if (error) {
-      alert('No se pudo eliminar la pregunta.');
+      showAlert('No se pudo eliminar la pregunta.');
       return;
     }
     setQuestions(prev => prev.filter(q => q.id !== id));
@@ -540,7 +542,7 @@ const App: React.FC = () => {
   const handleAddCategory = async (name: string, section: QuestionSection) => {
     const { error } = await supabase.from('question_categories').insert({ name, section });
     if (error) {
-      alert('No se pudo crear la categoria.');
+      showAlert('No se pudo crear la categoria.');
       return;
     }
     setCategories(prev => [...prev, { name, section }]);
@@ -549,7 +551,7 @@ const App: React.FC = () => {
   const handleUpdateCategory = async (prevName: string, nextName: string) => {
     const { error } = await supabase.from('question_categories').update({ name: nextName }).eq('name', prevName);
     if (error) {
-      alert('No se pudo actualizar la categoria.');
+      showAlert('No se pudo actualizar la categoria.');
       return;
     }
     setCategories(prev => prev.map(cat => (cat.name === prevName ? { ...cat, name: nextName } : cat)));
@@ -559,12 +561,12 @@ const App: React.FC = () => {
   const handleDeleteCategory = async (name: string, fallback: string) => {
     const { error: updateError } = await supabase.from('questions').update({ category: fallback }).eq('category', name);
     if (updateError) {
-      alert('No se pudo actualizar las preguntas.');
+      showAlert('No se pudo actualizar las preguntas.');
       return;
     }
     const { error: deleteError } = await supabase.from('question_categories').delete().eq('name', name);
     if (deleteError) {
-      alert('No se pudo eliminar la categoria.');
+      showAlert('No se pudo eliminar la categoria.');
       return;
     }
     setCategories(prev => prev.filter(cat => cat.name !== name));
@@ -635,7 +637,7 @@ const App: React.FC = () => {
   const exportToCSV = () => {
     if (evaluations.length === 0) return;
     if (questions.length === 0) {
-      alert("No hay preguntas configuradas.");
+      showAlert("No hay preguntas configuradas.");
       return;
     }
     const headers = ["Evaluador", "Evaluado", ...questions.map(q => `P${q.id}`), "Comentarios", "Fecha"];

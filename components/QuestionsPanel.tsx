@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Question, QuestionCategory, QuestionSection, QuestionType } from '../types.ts';
 import { HelpCircle, PlusCircle, Edit2, Trash2, Check, X, Settings } from 'lucide-react';
+import { useModal } from './ModalProvider.tsx';
 
 interface Props {
   questions: Question[];
@@ -39,6 +40,7 @@ const QuestionsPanel: React.FC<Props> = ({
   onUpdateCategory,
   onDeleteCategory,
 }) => {
+  const { showAlert, showConfirm } = useModal();
   const [newText, setNewText] = useState('');
   const [newCategory, setNewCategory] = useState('');
   const [newSection, setNewSection] = useState<QuestionSection>('peer');
@@ -130,7 +132,7 @@ const QuestionsPanel: React.FC<Props> = ({
   const addQuestion = async () => {
     if (!newText.trim()) return;
     if (categoriesForNewSection.length === 0 || !newCategory) {
-      alert('Primero agrega una categoria para esta seccion.');
+      showAlert('Primero agrega una categoria para esta seccion.');
       setShowCategoryManager(true);
       return;
     }
@@ -166,17 +168,21 @@ const QuestionsPanel: React.FC<Props> = ({
   };
 
   const removeQuestion = async (id: number) => {
-    if (confirm('Estas seguro de eliminar esta pregunta?')) {
-      await onDeleteQuestion(id);
-      if (editingId === id) cancelEditing();
-    }
+    const confirmed = await showConfirm('Estas seguro de eliminar esta pregunta?', {
+      title: 'Eliminar pregunta',
+      confirmLabel: 'Eliminar',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
+    await onDeleteQuestion(id);
+    if (editingId === id) cancelEditing();
   };
 
   const addCategory = async () => {
     const name = normalizeCategory(newCategoryName);
     if (!name) return;
     if (categoryExists(name)) {
-      alert('La categoria ya existe.');
+      showAlert('La categoria ya existe.');
       return;
     }
     await onAddCategory(name, categoryManagerSection);
@@ -205,7 +211,7 @@ const QuestionsPanel: React.FC<Props> = ({
     const name = normalizeCategory(editCategoryName);
     if (!name) return;
     if (categoryExists(name) && name.toLowerCase() !== category.toLowerCase()) {
-      alert('La categoria ya existe.');
+      showAlert('La categoria ya existe.');
       return;
     }
     await onUpdateCategory(category, name);
@@ -219,7 +225,7 @@ const QuestionsPanel: React.FC<Props> = ({
     if (!categoryEntry) return;
     const remainingInSection = categories.filter(cat => cat.section === categoryEntry.section).length;
     if (remainingInSection <= 1) {
-      alert('Debes mantener al menos una categoria por seccion.');
+      showAlert('Debes mantener al menos una categoria por seccion.');
       return;
     }
     const usageCount = questions.filter(q => q.category === category).length;
@@ -228,7 +234,12 @@ const QuestionsPanel: React.FC<Props> = ({
       ? `Esta categoria se usa en ${usageCount} preguntas. Se reasignaran a "${fallback}". Continuar?`
       : 'Estas seguro de eliminar esta categoria?';
 
-    if (!confirm(message)) return;
+    const confirmed = await showConfirm(message, {
+      title: 'Eliminar categoria',
+      confirmLabel: 'Eliminar',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
 
     await onDeleteCategory(category, fallback);
     if (newCategory === category) setNewCategory(fallback);
