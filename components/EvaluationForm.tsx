@@ -114,13 +114,16 @@ const EvaluationForm: React.FC<Props> = ({ evaluatorId, targetEmployee, question
                     rows={3}
                   />
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 w-full">
+                  <div
+                    className="grid gap-2 w-full"
+                    style={{ gridTemplateColumns: `repeat(${scaleOptions.length}, minmax(0, 1fr))` }}
+                  >
                     {scaleOptions.map((label, optionIndex) => (
                       <button
                         key={`${q.id}-${optionIndex}`}
                         type="button"
                         onClick={() => handleAnswerChange(q.id, optionIndex + 1)}
-                        className={`w-full py-3 px-3 text-sm rounded-lg border-2 transition-all ${answers[q.id] === optionIndex + 1 ? 'bg-[#eef5fa] border-[#005187] text-[#00406b]' : 'bg-white border-slate-200'}`}
+                        className={`w-full py-3 px-2 text-xs sm:text-sm leading-snug whitespace-normal rounded-lg border-2 transition-all ${answers[q.id] === optionIndex + 1 ? 'bg-[#eef5fa] border-[#005187] text-[#00406b]' : 'bg-white border-slate-200'}`}
                       >
                         {label}
                       </button>
