@@ -713,7 +713,7 @@ const App: React.FC = () => {
     { id: 'admin', label: 'Administracion', icon: Settings, show: isAdmin },
   ].filter(tab => tab.show);
 
-  const mustChangePassword = Boolean(session?.user?.user_metadata?.must_change_password);
+  const mustChangePassword = false;
 
   if (isLoadingSession) {
     return (

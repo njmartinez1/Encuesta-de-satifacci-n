@@ -61,6 +61,20 @@ const resolveEnv = async () => {
   return { supabaseUrl, supabaseAnonKey, adminEmail, adminPassword, adminAccessToken };
 };
 
+const signInAdmin = async (supabase, adminEmail, adminPassword) => {
+  if (!adminEmail || !adminPassword) {
+    throw new Error('Missing ADMIN_EMAIL/ADMIN_PASSWORD.');
+  }
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: adminEmail,
+    password: adminPassword,
+  });
+  if (error || !data?.session?.access_token) {
+    throw new Error(error?.message || 'No access token.');
+  }
+  return data.session.access_token;
+};
+
 const loadCsv = async (filePath) => {
   const raw = await fs.readFile(filePath, 'utf8');
   const lines = raw.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
@@ -104,19 +118,12 @@ const main = async () => {
   const supabase = createClient(supabaseUrl, supabaseAnonKey, { auth: { persistSession: false } });
   let accessToken = adminAccessToken;
   if (!accessToken) {
-    if (!adminEmail || !adminPassword) {
-      console.error('Missing ADMIN_EMAIL/ADMIN_PASSWORD or ADMIN_ACCESS_TOKEN.');
+    try {
+      accessToken = await signInAdmin(supabase, adminEmail, adminPassword);
+    } catch (error) {
+      console.error('Admin login failed:', error instanceof Error ? error.message : 'No access token.');
       process.exit(1);
     }
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: adminEmail,
-      password: adminPassword,
-    });
-    if (error || !data?.session?.access_token) {
-      console.error('Admin login failed:', error?.message || 'No access token.');
-      process.exit(1);
-    }
-    accessToken = data.session.access_token;
   }
 
   const rows = await loadCsv(fileArg);
@@ -127,16 +134,27 @@ const main = async () => {
 
   let success = 0;
   let failed = 0;
+  const sendRequest = async (row) => fetch(`${supabaseUrl}/functions/v1/admin-create-user`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      apikey: supabaseAnonKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(row),
+  });
   for (const row of rows) {
-    const response = await fetch(`${supabaseUrl}/functions/v1/admin-create-user`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        apikey: supabaseAnonKey,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(row),
-    });
+    let response = await sendRequest(row);
+    if (response.status === 401 && !adminAccessToken) {
+      try {
+        accessToken = await signInAdmin(supabase, adminEmail, adminPassword);
+        response = await sendRequest(row);
+      } catch (error) {
+        console.error(`Failed: ${row.email} -> Admin re-auth failed.`);
+        failed += 1;
+        continue;
+      }
+    }
     if (!response.ok) {
       const data = await response.json().catch(() => null);
       console.error(`Failed: ${row.email} -> ${data?.error || response.statusText}`);
