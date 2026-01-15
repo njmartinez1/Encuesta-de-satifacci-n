@@ -17,7 +17,7 @@ interface Props {
 
 const QUESTION_SECTIONS: { value: QuestionSection; label: string }[] = [
   { value: 'peer', label: 'Evaluacion de pares' },
-  { value: 'internal', label: 'Satisfaccion interna' },
+  { value: 'internal', label: 'Satisfacción interna' },
 ];
 
 const AdminPanel: React.FC<Props> = ({
@@ -45,6 +45,9 @@ const AdminPanel: React.FC<Props> = ({
   const [createError, setCreateError] = useState<string | null>(null);
   const [createSuccess, setCreateSuccess] = useState<string | null>(null);
   const [resetMessage, setResetMessage] = useState<string | null>(null);
+  const [staffFilter, setStaffFilter] = useState('');
+  const [assignmentEvaluatorFilter, setAssignmentEvaluatorFilter] = useState('');
+  const [assignmentTargetFilter, setAssignmentTargetFilter] = useState('');
 
   const startEditing = (emp: Employee) => {
     setEditingId(emp.id);
@@ -137,6 +140,34 @@ const AdminPanel: React.FC<Props> = ({
   const questionsForSection = questions.filter(question => question.section === selectedQuestionSection);
   const selectedCount = questionsForSection.filter(question => selectedQuestionIds.includes(question.id)).length;
   const selectedSectionLabel = QUESTION_SECTIONS.find(option => option.value === selectedQuestionSection)?.label || '';
+  const normalizedFilter = staffFilter.trim().toLowerCase();
+  const filteredEmployees = normalizedFilter
+    ? employees.filter(emp => (
+      emp.name.toLowerCase().includes(normalizedFilter)
+      || emp.role.toLowerCase().includes(normalizedFilter)
+    ))
+    : employees;
+  const normalizedEvaluatorFilter = assignmentEvaluatorFilter.trim().toLowerCase();
+  const evaluatorOptionsBase = normalizedEvaluatorFilter
+    ? employees.filter(emp => (
+      emp.name.toLowerCase().includes(normalizedEvaluatorFilter)
+      || emp.role.toLowerCase().includes(normalizedEvaluatorFilter)
+    ))
+    : employees;
+  const selectedEvaluatorEmployee = selectedEvaluator
+    ? employees.find(emp => emp.id === selectedEvaluator)
+    : null;
+  const evaluatorOptions = selectedEvaluatorEmployee && !evaluatorOptionsBase.some(emp => emp.id === selectedEvaluatorEmployee.id)
+    ? [selectedEvaluatorEmployee, ...evaluatorOptionsBase]
+    : evaluatorOptionsBase;
+  const normalizedTargetFilter = assignmentTargetFilter.trim().toLowerCase();
+  const assignmentTargets = employees.filter(emp => emp.id !== selectedEvaluator);
+  const filteredAssignmentTargets = normalizedTargetFilter
+    ? assignmentTargets.filter(emp => (
+      emp.name.toLowerCase().includes(normalizedTargetFilter)
+      || emp.role.toLowerCase().includes(normalizedTargetFilter)
+    ))
+    : assignmentTargets;
 
   return (
     <div className="space-y-10">
@@ -222,8 +253,18 @@ const AdminPanel: React.FC<Props> = ({
             <h2 className="text-xl font-bold text-slate-800">Gestionar plantilla</h2>
           </div>
 
+          <div className="mb-4">
+            <input
+              type="text"
+              placeholder="Buscar por nombre o cargo"
+              value={staffFilter}
+              onChange={(event) => setStaffFilter(event.target.value)}
+              className="w-full px-3 py-2 text-sm border rounded-lg"
+            />
+          </div>
+
           <div className="divide-y max-h-[400px] overflow-y-auto">
-            {employees.map(emp => (
+            {filteredEmployees.map(emp => (
               <div key={emp.id} className="py-3 flex items-center justify-between group">
                 {editingId === emp.id ? (
                   <div className="flex-grow grid grid-cols-2 gap-2 mr-2">
@@ -268,31 +309,53 @@ const AdminPanel: React.FC<Props> = ({
             <ListChecks className="text-[#005187]" />
             <h2 className="text-xl font-bold text-slate-800">Asignaciones</h2>
           </div>
+          <input
+            type="text"
+            placeholder="Buscar evaluador por nombre o cargo"
+            value={assignmentEvaluatorFilter}
+            onChange={(event) => setAssignmentEvaluatorFilter(event.target.value)}
+            className="w-full px-4 py-2 rounded-lg border mb-3 bg-white"
+          />
           <select
             className="w-full px-4 py-2 rounded-lg border mb-6 bg-white"
             value={selectedEvaluator || ''}
             onChange={(e) => setSelectedEvaluator(e.target.value)}
           >
             <option value="">Selecciona evaluador...</option>
-            {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
+            {evaluatorOptions.map(emp => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
           </select>
 
           {selectedEvaluator && (
-            <div className="grid grid-cols-1 gap-2 max-h-[400px] overflow-y-auto">
-              {employees.filter(e => e.id !== selectedEvaluator).map(emp => {
-                const isAssigned = assignments.find(a => a.evaluatorId === selectedEvaluator)?.targets.includes(emp.id);
-                return (
-                  <button
-                    key={emp.id}
-                    onClick={() => toggleAssignment(selectedEvaluator, emp.id)}
-                    className={`flex items-center gap-3 p-3 rounded-xl border-2 text-left ${isAssigned ? 'border-emerald-500 bg-emerald-50' : 'border-slate-100 bg-slate-50'}`}
-                  >
-                    <CheckCircle2 size={18} className={isAssigned ? 'text-emerald-500' : 'text-slate-300'} />
-                    <span className="text-sm font-medium">{emp.name}</span>
-                  </button>
-                );
-              })}
-            </div>
+            <>
+              <input
+                type="text"
+                placeholder="Buscar personal asignable"
+                value={assignmentTargetFilter}
+                onChange={(event) => setAssignmentTargetFilter(event.target.value)}
+                className="w-full px-4 py-2 rounded-lg border mb-3 bg-white"
+              />
+              {filteredAssignmentTargets.length === 0 ? (
+                <div className="text-sm text-slate-400 bg-slate-50 border border-dashed rounded-xl p-4 text-center">
+                  No hay coincidencias para este filtro.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-2 max-h-[400px] overflow-y-auto">
+                  {filteredAssignmentTargets.map(emp => {
+                    const isAssigned = assignments.find(a => a.evaluatorId === selectedEvaluator)?.targets.includes(emp.id);
+                    return (
+                      <button
+                        key={emp.id}
+                        onClick={() => toggleAssignment(selectedEvaluator, emp.id)}
+                        className={`flex items-center gap-3 p-3 rounded-xl border-2 text-left ${isAssigned ? 'border-emerald-500 bg-emerald-50' : 'border-slate-100 bg-slate-50'}`}
+                      >
+                        <CheckCircle2 size={18} className={isAssigned ? 'text-emerald-500' : 'text-slate-300'} />
+                        <span className="text-sm font-medium">{emp.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </>
           )}
         </section>
       </div>
