@@ -255,7 +255,28 @@ const App: React.FC = () => {
             sortOrder: orderValue,
           });
         }
-      });      const evaluatorRows = (evaluatorQuestionsRes.data || []) as EvaluatorQuestionRow[];
+      });
+
+      const derivedCategories = Array.from(derivedCategoriesMap.values()).sort((a, b) => {
+        const aOrder = a.sortOrder ?? 0;
+        const bOrder = b.sortOrder ?? 0;
+        if (aOrder !== bOrder) return aOrder - bOrder;
+        return a.name.localeCompare(b.name);
+      });
+
+      const assignmentRows = (assignmentsRes.data || []) as AssignmentRow[];
+      const assignmentsMap = new Map<string, string[]>();
+      assignmentRows.forEach(row => {
+        const targets = assignmentsMap.get(row.evaluator_id) || [];
+        targets.push(row.target_id);
+        assignmentsMap.set(row.evaluator_id, targets);
+      });
+      const assignmentsList: Assignment[] = Array.from(assignmentsMap.entries()).map(([evaluatorId, targets]) => ({
+        evaluatorId,
+        targets,
+      }));
+
+      const evaluatorRows = (evaluatorQuestionsRes.data || []) as EvaluatorQuestionRow[];
       const evaluatorMap: Record<string, number[]> = {};
       evaluatorRows.forEach(row => {
         if (!evaluatorMap[row.evaluator_id]) evaluatorMap[row.evaluator_id] = [];
