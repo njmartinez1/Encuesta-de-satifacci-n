@@ -86,9 +86,11 @@ const loadCsv = async (filePath) => {
   const emailIndex = header.indexOf('email');
   const nameIndex = header.indexOf('name');
   const roleIndex = header.indexOf('role');
+  const groupIndex = header.indexOf('group');
+  const campusIndex = header.indexOf('campus');
   const adminIndex = header.indexOf('is_admin');
   if (emailIndex === -1 || nameIndex === -1 || roleIndex === -1) {
-    throw new Error('CSV header must include: email,name,role (optional: is_admin).');
+    throw new Error('CSV header must include: email,name,role (optional: group,campus,is_admin).');
   }
   const rows = [];
   for (let i = 1; i < lines.length; i += 1) {
@@ -97,8 +99,10 @@ const loadCsv = async (filePath) => {
     const name = values[nameIndex]?.trim();
     const role = values[roleIndex]?.trim();
     if (!email || !name || !role) continue;
-    const isAdmin = adminIndex >= 0 ? parseBoolean(values[adminIndex]) : false;
-    rows.push({ email, name, role, is_admin: isAdmin });
+    const group = groupIndex >= 0 ? values[groupIndex]?.trim() : '';
+    const campus = campusIndex >= 0 ? values[campusIndex]?.trim() : '';
+    const isAdmin = adminIndex >= 0 ? parseBoolean(values[adminIndex]) : null;
+    rows.push({ email, name, role, group, campus, is_admin: isAdmin });
   }
   return rows;
 };
@@ -134,6 +138,7 @@ const main = async () => {
 
   let success = 0;
   let failed = 0;
+  let updated = 0;
   const sendRequest = async (row) => fetch(`${supabaseUrl}/functions/v1/admin-create-user`, {
     method: 'POST',
     headers: {
@@ -143,6 +148,31 @@ const main = async () => {
     },
     body: JSON.stringify(row),
   });
+  const updateExistingProfile = async (row) => {
+    const profileUpdates = {
+      name: row.name,
+      role: row.role,
+      group_name: row.group || null,
+      campus: row.campus || null,
+    };
+    if (typeof row.is_admin === 'boolean') {
+      profileUpdates.is_admin = row.is_admin;
+    }
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .update(profileUpdates)
+      .eq('email', row.email);
+    if (profileError) {
+      return profileError.message || 'Failed to update profile.';
+    }
+    const { error: allowlistError } = await supabase
+      .from('allowed_emails')
+      .upsert({ email: row.email });
+    if (allowlistError) {
+      return allowlistError.message || 'Failed to update allowlist.';
+    }
+    return null;
+  };
   for (const row of rows) {
     let response = await sendRequest(row);
     if (response.status === 401 && !adminAccessToken) {
@@ -157,7 +187,19 @@ const main = async () => {
     }
     if (!response.ok) {
       const data = await response.json().catch(() => null);
-      console.error(`Failed: ${row.email} -> ${data?.error || response.statusText}`);
+      const message = data?.error || response.statusText;
+      if (typeof message === 'string' && message.includes('already been registered')) {
+        const updateError = await updateExistingProfile(row);
+        if (updateError) {
+          console.error(`Failed: ${row.email} -> ${updateError}`);
+          failed += 1;
+          continue;
+        }
+        updated += 1;
+        console.log(`Updated: ${row.email}`);
+        continue;
+      }
+      console.error(`Failed: ${row.email} -> ${message}`);
       failed += 1;
       continue;
     }
@@ -165,7 +207,7 @@ const main = async () => {
     console.log(`Created: ${row.email}`);
   }
 
-  console.log(`Done. Created ${success}, failed ${failed}.`);
+  console.log(`Done. Created ${success}, updated ${updated}, failed ${failed}.`);
 };
 
 main().catch((error) => {

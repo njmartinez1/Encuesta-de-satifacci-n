@@ -1,4 +1,4 @@
-
+﻿
 import React from 'react';
 import { Employee } from '../types.ts';
 import { UserCircle2 } from 'lucide-react';
@@ -36,4 +36,5 @@ const EmployeeSelector: React.FC<Props> = ({ employees, onSelect }) => {
 };
 
 export default EmployeeSelector;
+
 

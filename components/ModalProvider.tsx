@@ -63,7 +63,7 @@ export const ModalProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       resolverRef.current = resolve;
       setModal({
         kind: 'confirm',
-        title: options.title ?? 'Confirmar accion',
+        title: options.title ?? 'Confirmar acción',
         message,
         confirmLabel: options.confirmLabel ?? 'Confirmar',
         cancelLabel: options.cancelLabel ?? 'Cancelar',

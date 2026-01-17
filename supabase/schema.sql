@@ -7,9 +7,16 @@ create table if not exists public.profiles (
   email text unique not null,
   name text,
   role text,
+  group_name text,
+  campus text,
   is_admin boolean not null default false,
   created_at timestamptz not null default now()
 );
+
+alter table public.profiles
+  add column if not exists group_name text;
+alter table public.profiles
+  add column if not exists campus text;
 
 create table if not exists public.allowed_emails (
   email text primary key,
@@ -19,11 +26,23 @@ create table if not exists public.allowed_emails (
 create table if not exists public.question_categories (
   name text primary key,
   section text not null default 'peer',
+  sort_order integer not null default 0,
   created_at timestamptz not null default now()
 );
 
 alter table public.question_categories
   add column if not exists section text not null default 'peer';
+alter table public.question_categories
+  add column if not exists sort_order integer not null default 0;
+
+create table if not exists public.question_sections (
+  section text primary key,
+  sort_order integer not null default 0,
+  created_at timestamptz not null default now()
+);
+
+alter table public.question_sections
+  add column if not exists sort_order integer not null default 0;
 
 create table if not exists public.questions (
   id bigserial primary key,
@@ -32,7 +51,8 @@ create table if not exists public.questions (
   section text not null default 'peer',
   question_type text not null default 'scale',
   options jsonb,
-  is_active boolean not null default true
+  is_active boolean not null default true,
+  sort_order integer not null default 0
 );
 
 alter table public.questions
@@ -41,6 +61,8 @@ alter table public.questions
   add column if not exists question_type text not null default 'scale';
 alter table public.questions
   add column if not exists options jsonb;
+alter table public.questions
+  add column if not exists sort_order integer not null default 0;
 
 create table if not exists public.assignments (
   evaluator_id uuid not null references public.profiles(id) on delete cascade,
@@ -123,6 +145,7 @@ $$;
 alter table public.profiles enable row level security;
 alter table public.allowed_emails enable row level security;
 alter table public.question_categories enable row level security;
+alter table public.question_sections enable row level security;
 alter table public.questions enable row level security;
 alter table public.assignments enable row level security;
 alter table public.evaluator_questions enable row level security;
@@ -134,6 +157,8 @@ drop policy if exists allowed_emails_select_self on public.allowed_emails;
 drop policy if exists allowed_emails_admin_all on public.allowed_emails;
 drop policy if exists categories_select_authenticated on public.question_categories;
 drop policy if exists categories_admin_all on public.question_categories;
+drop policy if exists sections_select_authenticated on public.question_sections;
+drop policy if exists sections_admin_all on public.question_sections;
 drop policy if exists questions_select_authenticated on public.questions;
 drop policy if exists questions_admin_all on public.questions;
 drop policy if exists assignments_select_own_or_admin on public.assignments;
@@ -187,6 +212,17 @@ using (public.is_allowed_email());
 
 create policy "categories_admin_all"
 on public.question_categories
+for all
+using (public.is_allowed_email() and public.is_admin())
+with check (public.is_allowed_email() and public.is_admin());
+
+create policy "sections_select_authenticated"
+on public.question_sections
+for select
+using (public.is_allowed_email());
+
+create policy "sections_admin_all"
+on public.question_sections
 for all
 using (public.is_allowed_email() and public.is_admin())
 with check (public.is_allowed_email() and public.is_admin());

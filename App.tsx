@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import { Employee, Evaluation, Assignment, Question, QuestionCategory, QuestionSection, QuestionType } from './types.ts';
+import { Employee, Evaluation, Assignment, Question, QuestionCategory, QuestionSection, QuestionSectionOption, QuestionType } from './types.ts';
 import EvaluationForm from './components/EvaluationForm.tsx';
 import ResultsDashboard from './components/ResultsDashboard.tsx';
 import AdminPanel from './components/AdminPanel.tsx';
@@ -14,6 +14,8 @@ type ProfileRow = {
   email: string | null;
   name: string | null;
   role: string | null;
+  group_name: string | null;
+  campus: string | null;
   is_admin: boolean | null;
 };
 
@@ -27,11 +29,58 @@ type EvaluationRow = {
   created_at: string | null;
 };
 
+type SectionOrderRow = { section: string | null; sort_order: number | null };
+
+const DEFAULT_SECTION_OPTIONS: QuestionSectionOption[] = [
+  { value: 'peer', label: 'Evaluación de pares' },
+  { value: 'internal', label: 'Satisfacción interna' },
+];
+
+const buildSectionOptions = (rows: SectionOrderRow[] | null | undefined): QuestionSectionOption[] => {
+  if (!rows || rows.length === 0) {
+    return DEFAULT_SECTION_OPTIONS;
+  }
+  const orderMap = new Map<string, number>();
+  rows.forEach(row => {
+    if (row.section) {
+      orderMap.set(row.section, row.sort_order ?? 0);
+    }
+  });
+  return DEFAULT_SECTION_OPTIONS
+    .map((section, index) => ({
+      ...section,
+      sortOrder: orderMap.get(section.value) ?? index,
+    }))
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map(({ sortOrder, ...section }) => section);
+};
+
+const sortQuestionsBySection = (items: Question[], sections: QuestionSectionOption[]) => {
+  const orderMap = new Map<QuestionSection, number>();
+  sections.forEach((section, index) => {
+    orderMap.set(section.value, index);
+  });
+  return [...items].sort((a, b) => {
+    const sectionOrderA = orderMap.get(a.section) ?? 0;
+    const sectionOrderB = orderMap.get(b.section) ?? 0;
+    if (sectionOrderA !== sectionOrderB) {
+      return sectionOrderA - sectionOrderB;
+    }
+    const aOrder = a.sortOrder ?? a.id;
+    const bOrder = b.sortOrder ?? b.id;
+    if (aOrder !== bOrder) {
+      return aOrder - bOrder;
+    }
+    return a.id - b.id;
+  });
+};
 const mapProfile = (profile: ProfileRow): Employee => ({
   id: profile.id,
   email: profile.email ?? '',
   name: profile.name || profile.email || 'Sin nombre',
   role: profile.role || 'Sin cargo',
+  group: profile.group_name || '',
+  campus: profile.campus || '',
   isAdmin: Boolean(profile.is_admin),
 });
 
@@ -44,6 +93,7 @@ const App: React.FC = () => {
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [categories, setCategories] = useState<QuestionCategory[]>([]);
+  const [questionSections, setQuestionSections] = useState<QuestionSectionOption[]>(DEFAULT_SECTION_OPTIONS);
   const [evaluatorQuestions, setEvaluatorQuestions] = useState<Record<string, number[]>>({});
   const [view, setView] = useState<'survey' | 'results' | 'admin' | 'questions'>('survey');
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
@@ -88,7 +138,9 @@ const App: React.FC = () => {
         setEvaluations([]);
         setQuestions([]);
         setCategories([]);
+        setQuestionSections(DEFAULT_SECTION_OPTIONS);
         setEvaluatorQuestions({});
+        setIsLoadingData(false);
         return;
       }
 
@@ -97,14 +149,16 @@ const App: React.FC = () => {
 
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
-        .select('id, email, name, role, is_admin')
+        .select('id, email, name, role, group_name, campus, is_admin')
         .eq('id', session.user.id)
         .single();
 
       if (profileError || !profileData) {
         setAuthError('Tu cuenta no tiene acceso.');
-        await supabase.auth.signOut();
         setIsLoadingData(false);
+        setCurrentUser(null);
+        setSession(null);
+        supabase.auth.signOut();
         return;
       }
 
@@ -130,7 +184,7 @@ const App: React.FC = () => {
         evaluatorQuestionsRes,
         evaluationsRes,
       ] = await Promise.all([
-        supabase.from('profiles').select('id, email, name, role, is_admin'),
+        supabase.from('profiles').select('id, email, name, role, group_name, campus, is_admin'),
         assignmentsQuery,
         evaluatorQuestionsQuery,
         evaluationsQuery,
@@ -138,20 +192,22 @@ const App: React.FC = () => {
 
       const categoriesPrimary = await supabase
         .from('question_categories')
-        .select('name, section')
+        .select('name, section, sort_order')
+        .order('sort_order', { ascending: true })
         .order('name');
       let categoriesData = categoriesPrimary.data;
       let categoriesError = categoriesPrimary.error;
       if (categoriesError) {
-        const fallback = await supabase.from('question_categories').select('name').order('name');
+        const fallback = await supabase.from('question_categories').select('name, section').order('name');
         categoriesData = fallback.data;
         categoriesError = fallback.error;
       }
 
       const questionsPrimary = await supabase
         .from('questions')
-        .select('id, text, category, section, question_type, options')
-        .order('id');
+        .select('id, text, category, section, question_type, options, sort_order')
+        .order('sort_order', { ascending: true })
+        .order('id', { ascending: true });
       let questionsData = questionsPrimary.data;
       let questionsError = questionsPrimary.error;
       if (questionsError) {
@@ -159,6 +215,11 @@ const App: React.FC = () => {
         questionsData = fallback.data;
         questionsError = fallback.error;
       }
+
+      const sectionOrderRes = await supabase
+        .from('question_sections')
+        .select('section, sort_order')
+        .order('sort_order', { ascending: true });
 
       if (profilesRes.error || questionsError || categoriesError || assignmentsRes.error || evaluatorQuestionsRes.error || evaluationsRes.error) {
         setAuthError('No se pudieron cargar los datos.');
@@ -174,33 +235,27 @@ const App: React.FC = () => {
         section: row.section ?? 'peer',
         type: (row.question_type ?? 'scale') as QuestionType,
         options: Array.isArray(row.options) ? row.options : undefined,
+        sortOrder: row.sort_order ?? undefined,
       })) as Question[];
       const categoriesList = (categoriesData || []).map(row => ({
         name: row.name,
         section: row.section ?? 'peer',
+        sortOrder: row.sort_order ?? 0,
       })) as QuestionCategory[];
-      const derivedCategories = Array.from(
-        new Map(
-          questionsList.map(question => [
-            `${question.category}-${question.section}`,
-            { name: question.category, section: question.section },
-          ])
-        ).values()
-      );
 
-      const assignmentRows = (assignmentsRes.data || []) as AssignmentRow[];
-      const assignmentsMap = new Map<string, string[]>();
-      assignmentRows.forEach(row => {
-        const targets = assignmentsMap.get(row.evaluator_id) || [];
-        targets.push(row.target_id);
-        assignmentsMap.set(row.evaluator_id, targets);
-      });
-      const assignmentsList: Assignment[] = Array.from(assignmentsMap.entries()).map(([evaluatorId, targets]) => ({
-        evaluatorId,
-        targets,
-      }));
-
-      const evaluatorRows = (evaluatorQuestionsRes.data || []) as EvaluatorQuestionRow[];
+      const derivedCategoriesMap = new Map<string, QuestionCategory>();
+      questionsList.forEach(question => {
+        const key = `${question.category}-${question.section}`;
+        const current = derivedCategoriesMap.get(key);
+        const orderValue = question.sortOrder ?? question.id;
+        if (!current || orderValue < (current.sortOrder ?? orderValue)) {
+          derivedCategoriesMap.set(key, {
+            name: question.category,
+            section: question.section,
+            sortOrder: orderValue,
+          });
+        }
+      });      const evaluatorRows = (evaluatorQuestionsRes.data || []) as EvaluatorQuestionRow[];
       const evaluatorMap: Record<string, number[]> = {};
       evaluatorRows.forEach(row => {
         if (!evaluatorMap[row.evaluator_id]) evaluatorMap[row.evaluator_id] = [];
@@ -220,16 +275,29 @@ const App: React.FC = () => {
         timestamp: row.created_at ? new Date(row.created_at).toLocaleString() : '',
       }));
 
+      const sectionOptions = buildSectionOptions(
+        sectionOrderRes.error ? null : (sectionOrderRes.data as SectionOrderRow[] | null)
+      );
+      const sortedQuestions = sortQuestionsBySection(questionsList, sectionOptions);
+
       setEmployees(employeesList);
-      setQuestions(questionsList);
+      setQuestions(sortedQuestions);
       setCategories(categoriesList.length ? categoriesList : derivedCategories);
+      setQuestionSections(sectionOptions);
       setAssignments(assignmentsList);
       setEvaluatorQuestions(evaluatorMap);
       setEvaluations(evaluationsList);
       setIsLoadingData(false);
     };
 
-    loadData();
+    loadData().catch((error) => {
+      console.error('Error cargando datos', error);
+      setAuthError('No se pudieron cargar los datos.');
+      setIsLoadingData(false);
+      setCurrentUser(null);
+      setSession(null);
+      supabase.auth.signOut();
+    });
   }, [session]);
 
   useEffect(() => {
@@ -408,21 +476,17 @@ const App: React.FC = () => {
     return true;
   };
 
-  const handleUpdateEmployee = async (id: string, updates: { name: string; role: string }) => {
+  const handleUpdateEmployee = async (id: string, updates: { name: string; role: string; group: string; campus: string }) => {
     const { error } = await supabase
       .from('profiles')
-      .update({ name: updates.name, role: updates.role })
+      .update({ name: updates.name, role: updates.role, group_name: updates.group, campus: updates.campus })
       .eq('id', id);
     if (error) {
-      showAlert('No se pudo actualizar el perfil.');
+      showAlert('No se pudo actualizar al empleado.');
       return;
     }
     setEmployees(prev => prev.map(emp => (emp.id === id ? { ...emp, ...updates } : emp)));
-    if (currentUser?.id === id) {
-      setCurrentUser(prev => (prev ? { ...prev, ...updates } : prev));
-    }
   };
-
   const handleToggleAssignment = async (evaluatorId: string, targetId: string) => {
     const existing = assignments.find(a => a.evaluatorId === evaluatorId)?.targets.includes(targetId);
     if (existing) {
@@ -483,10 +547,22 @@ const App: React.FC = () => {
   };
 
   const handleAddQuestion = async (text: string, category: string, section: QuestionSection, type: QuestionType, options: string[]) => {
+    const sectionQuestions = questions.filter(question => question.section === section);
+    const maxSortOrder = sectionQuestions.reduce((max, question, index) => (
+      Math.max(max, question.sortOrder ?? index)
+    ), -1);
+    const nextSortOrder = maxSortOrder + 1;
     const { data, error } = await supabase
       .from('questions')
-      .insert({ text, category, section, question_type: type, options: type === 'scale' ? options : null })
-      .select('id, text, category, section, question_type, options')
+      .insert({
+        text,
+        category,
+        section,
+        question_type: type,
+        options: type === 'scale' ? options : null,
+        sort_order: nextSortOrder,
+      })
+      .select('id, text, category, section, question_type, options, sort_order')
       .single();
     if (error || !data) {
       showAlert('No se pudo crear la pregunta.');
@@ -500,29 +576,86 @@ const App: React.FC = () => {
       section: data.section ?? section,
       type: (data.question_type ?? type) as QuestionType,
       options: Array.isArray(data.options) ? data.options : (type === 'scale' ? options : undefined),
+      sortOrder: data.sort_order ?? nextSortOrder,
     } as Question;
-    setQuestions(prev => [...prev, newQuestion].sort((a, b) => a.id - b.id));
+    setQuestions(prev => sortQuestionsBySection([...prev, newQuestion], questionSections));
     if (!categories.some(cat => cat.name === category)) {
       setCategories(prev => [...prev, { name: category, section }]);
     }
   };
-
   const handleUpdateQuestion = async (id: number, text: string, category: string, section: QuestionSection, type: QuestionType, options: string[]) => {
+    const existing = questions.find(question => question.id === id);
+    const sectionQuestions = questions.filter(question => question.section === section);
+    const currentIndex = sectionQuestions.findIndex(question => question.id === id);
+    const baseSortOrder = existing?.sortOrder ?? (currentIndex >= 0 ? currentIndex : 0);
+    const maxSortOrder = sectionQuestions
+      .filter(question => question.id !== id)
+      .reduce((max, question, index) => Math.max(max, question.sortOrder ?? index), -1);
+    const nextSortOrder = existing?.section === section ? baseSortOrder : maxSortOrder + 1;
     const { error } = await supabase
       .from('questions')
-      .update({ text, category, section, question_type: type, options: type === 'scale' ? options : null })
+      .update({
+        text,
+        category,
+        section,
+        question_type: type,
+        options: type === 'scale' ? options : null,
+        sort_order: nextSortOrder,
+      })
       .eq('id', id);
     if (error) {
       showAlert('No se pudo actualizar la pregunta.');
       return;
     }
-    setQuestions(prev => prev.map(q => (
-      q.id === id
-        ? { ...q, text, category, section, type, options: type === 'scale' ? options : undefined }
-        : q
-    )));
+    setQuestions(prev => sortQuestionsBySection(prev.map(question => (
+      question.id === id
+        ? {
+          ...question,
+          text,
+          category,
+          section,
+          type,
+          options: type === 'scale' ? options : undefined,
+          sortOrder: nextSortOrder,
+        }
+        : question
+    )), questionSections));
+  };
+  const handleUpdateQuestionOrder = async (section: QuestionSection, orderedIds: number[]) => {
+    const rows = orderedIds.map((questionId, index) => ({
+      id: questionId,
+      sort_order: index,
+    }));
+    const { error } = await supabase
+      .from('questions')
+      .upsert(rows, { onConflict: 'id' });
+    if (error) {
+      showAlert('No se pudo actualizar el orden de preguntas.');
+      return;
+    }
+    const orderMap = new Map(orderedIds.map((questionId, index) => [questionId, index]));
+    setQuestions(prev => sortQuestionsBySection(prev.map(question => (
+      question.section === section && orderMap.has(question.id)
+        ? { ...question, sortOrder: orderMap.get(question.id) }
+        : question
+    )), questionSections));
   };
 
+  const handleUpdateQuestionSections = async (sections: QuestionSectionOption[]) => {
+    const rows = sections.map((section, index) => ({
+      section: section.value,
+      sort_order: index,
+    }));
+    const { error } = await supabase
+      .from('question_sections')
+      .upsert(rows, { onConflict: 'section' });
+    if (error) {
+      showAlert('No se pudo actualizar el orden de secciones.');
+      return;
+    }
+    setQuestionSections(sections);
+    setQuestions(prev => sortQuestionsBySection(prev, sections));
+  };
   const handleDeleteQuestion = async (id: number) => {
     const { error } = await supabase.from('questions').delete().eq('id', id);
     if (error) {
@@ -540,14 +673,22 @@ const App: React.FC = () => {
   };
 
   const handleAddCategory = async (name: string, section: QuestionSection) => {
-    const { error } = await supabase.from('question_categories').insert({ name, section });
+    const sectionCategories = categories.filter(cat => cat.section === section);
+    const maxSortOrder = sectionCategories.reduce((max, cat, index) => (
+      Math.max(max, cat.sortOrder ?? index)
+    ), -1);
+    const nextSortOrder = maxSortOrder + 1;
+    const { error } = await supabase.from('question_categories').insert({
+      name,
+      section,
+      sort_order: nextSortOrder,
+    });
     if (error) {
       showAlert('No se pudo crear la categoria.');
       return;
     }
-    setCategories(prev => [...prev, { name, section }]);
+    setCategories(prev => [...prev, { name, section, sortOrder: nextSortOrder }]);
   };
-
   const handleUpdateCategory = async (prevName: string, nextName: string) => {
     const { error } = await supabase.from('question_categories').update({ name: nextName }).eq('name', prevName);
     if (error) {
@@ -573,7 +714,27 @@ const App: React.FC = () => {
     setQuestions(prev => prev.map(q => (q.category === name ? { ...q, category: fallback } : q)));
   };
 
-  const handleCreateUser = async (payload: { email: string; name: string; role: string; isAdmin: boolean }) => {
+  const handleUpdateCategoryOrder = async (section: QuestionSection, orderedNames: string[]) => {
+    const rows = orderedNames.map((name, index) => ({
+      name,
+      section,
+      sort_order: index,
+    }));
+    const { error } = await supabase
+      .from('question_categories')
+      .upsert(rows, { onConflict: 'name' });
+    if (error) {
+      showAlert('No se pudo actualizar el orden de categorias.');
+      return;
+    }
+    const orderMap = new Map(orderedNames.map((name, index) => [name, index]));
+    setCategories(prev => prev.map(cat => (
+      cat.section === section && orderMap.has(cat.name)
+        ? { ...cat, sortOrder: orderMap.get(cat.name) }
+        : cat
+    )));
+  };
+  const handleCreateUser = async (payload: { email: string; name: string; role: string; group: string; campus: string; isAdmin: boolean }) => {
     const { data: sessionData } = await supabase.auth.getSession();
     const accessToken = sessionData.session?.access_token;
     if (!accessToken || !supabaseUrl || !supabaseAnonKey) {
@@ -591,6 +752,8 @@ const App: React.FC = () => {
         email: payload.email,
         name: payload.name,
         role: payload.role,
+        group: payload.group,
+        campus: payload.campus,
         is_admin: payload.isAdmin,
       }),
     });
@@ -1097,7 +1260,7 @@ const App: React.FC = () => {
                 <Download size={18} /> Exportar CSV
               </button>
             </div>
-            <ResultsDashboard evaluations={evaluations} employees={employees} questions={questions} />
+            <ResultsDashboard evaluations={evaluations} employees={employees} questions={questions} assignments={assignments} />
           </div>
         )}
 
@@ -1105,12 +1268,14 @@ const App: React.FC = () => {
           <QuestionsPanel
             questions={questions}
             categories={categories}
+            questionSections={questionSections}
             onAddQuestion={handleAddQuestion}
             onUpdateQuestion={handleUpdateQuestion}
             onDeleteQuestion={handleDeleteQuestion}
             onAddCategory={handleAddCategory}
             onUpdateCategory={handleUpdateCategory}
             onDeleteCategory={handleDeleteCategory}
+            onUpdateCategoryOrder={handleUpdateCategoryOrder}
           />
         )}
 
@@ -1119,10 +1284,13 @@ const App: React.FC = () => {
             employees={employees}
             assignments={assignments}
             questions={questions}
+            questionSections={questionSections}
             evaluatorQuestions={evaluatorQuestions}
             onUpdateEmployee={handleUpdateEmployee}
             onToggleAssignment={handleToggleAssignment}
             onUpdateEvaluatorQuestions={handleUpdateEvaluatorQuestions}
+            onUpdateQuestionOrder={handleUpdateQuestionOrder}
+            onUpdateQuestionSections={handleUpdateQuestionSections}
             onCreateUser={handleCreateUser}
             onResetPassword={handleResetPassword}
           />

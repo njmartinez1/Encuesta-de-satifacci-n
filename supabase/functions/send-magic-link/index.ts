@@ -44,7 +44,7 @@ const templates: Record<string, Template> = {
   "reinventedsantaclara.edu.ec": {
     subject: "Acceso a Encuestas Reinvented",
     heading: "Acceso a Encuestas Reinvented",
-    intro: "Haz clic en el enlace para continuar con tu evaluacion.",
+    intro: "Haz clic en el enlace para continuar con tu evaluación.",
     buttonText: "Continuar",
     footer: "Si no solicitaste este acceso, ignora este mensaje.",
   },

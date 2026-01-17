@@ -1,7 +1,9 @@
-﻿export interface Employee {
+export interface Employee {
   id: string;
   name: string;
   role: string;
+  group: string;
+  campus: string;
   email: string;
   isAdmin: boolean;
 }
@@ -16,11 +18,18 @@ export interface Question {
   section: QuestionSection;
   type: QuestionType;
   options?: string[];
+  sortOrder?: number;
 }
 
 export interface QuestionCategory {
   name: string;
   section: QuestionSection;
+  sortOrder?: number;
+}
+
+export interface QuestionSectionOption {
+  value: QuestionSection;
+  label: string;
 }
 
 export interface Evaluation {
@@ -35,3 +44,6 @@ export interface Assignment {
   evaluatorId: string;
   targets: string[]; // List of employee IDs to evaluate
 }
+
+
+

@@ -1,26 +1,24 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Question, QuestionCategory, QuestionSection, QuestionType } from '../types.ts';
+﻿import React, { useState, useEffect, useMemo } from 'react';
+import { Question, QuestionCategory, QuestionSection, QuestionSectionOption, QuestionType } from '../types.ts';
 import { HelpCircle, PlusCircle, Edit2, Trash2, Check, X, Settings } from 'lucide-react';
 import { useModal } from './ModalProvider.tsx';
 
 interface Props {
   questions: Question[];
   categories: QuestionCategory[];
+  questionSections: QuestionSectionOption[];
   onAddQuestion: (text: string, category: string, section: QuestionSection, type: QuestionType, options: string[]) => Promise<void>;
   onUpdateQuestion: (id: number, text: string, category: string, section: QuestionSection, type: QuestionType, options: string[]) => Promise<void>;
   onDeleteQuestion: (id: number) => Promise<void>;
   onAddCategory: (name: string, section: QuestionSection) => Promise<void>;
   onUpdateCategory: (prevName: string, nextName: string) => Promise<void>;
   onDeleteCategory: (name: string, fallback: string) => Promise<void>;
+  onUpdateCategoryOrder: (section: QuestionSection, orderedNames: string[]) => Promise<void>;
 }
 
 const ADD_CATEGORY_VALUE = '__add__';
-const SECTION_OPTIONS: { value: QuestionSection; label: string }[] = [
-  { value: 'peer', label: 'Evaluacion de pares' },
-  { value: 'internal', label: 'Satisfaccion interna' },
-];
 const QUESTION_TYPE_OPTIONS: { value: QuestionType; label: string }[] = [
-  { value: 'scale', label: 'Opcion multiple' },
+  { value: 'scale', label: 'Opción múltiple' },
   { value: 'text', label: 'Texto' },
 ];
 const DEFAULT_SCALE_OPTIONS = [
@@ -33,14 +31,17 @@ const DEFAULT_SCALE_OPTIONS = [
 const QuestionsPanel: React.FC<Props> = ({
   questions,
   categories,
+  questionSections,
   onAddQuestion,
   onUpdateQuestion,
   onDeleteQuestion,
   onAddCategory,
   onUpdateCategory,
   onDeleteCategory,
+  onUpdateCategoryOrder,
 }) => {
   const { showAlert, showConfirm } = useModal();
+  const sectionOptions = questionSections;
   const [newText, setNewText] = useState('');
   const [newCategory, setNewCategory] = useState('');
   const [newSection, setNewSection] = useState<QuestionSection>('peer');
@@ -61,19 +62,33 @@ const QuestionsPanel: React.FC<Props> = ({
   const [editCategoryName, setEditCategoryName] = useState('');
 
   const categoriesBySection = useMemo(() => {
-    const grouped: Record<QuestionSection, string[]> = { peer: [], internal: [] };
+    const grouped: Record<QuestionSection, QuestionCategory[]> = { peer: [], internal: [] };
     categories.forEach(category => {
-      if (!grouped[category.section].includes(category.name)) {
-        grouped[category.section].push(category.name);
+      if (!grouped[category.section].some(item => item.name === category.name)) {
+        grouped[category.section].push(category);
       }
     });
-    grouped.peer.sort((a, b) => a.localeCompare(b));
-    grouped.internal.sort((a, b) => a.localeCompare(b));
+    const sortByOrder = (a: QuestionCategory, b: QuestionCategory) => {
+      const aOrder = a.sortOrder ?? 0;
+      const bOrder = b.sortOrder ?? 0;
+      if (aOrder !== bOrder) return aOrder - bOrder;
+      return a.name.localeCompare(b.name);
+    };
+    grouped.peer.sort(sortByOrder);
+    grouped.internal.sort(sortByOrder);
     return grouped;
   }, [categories]);
 
-  const categoriesForNewSection = categoriesBySection[newSection];
-  const categoriesForEditSection = categoriesBySection[editSection];
+  const categoryNamesBySection = useMemo(() => ({
+    peer: categoriesBySection.peer.map(category => category.name),
+    internal: categoriesBySection.internal.map(category => category.name),
+  }), [categoriesBySection]);
+
+  const categoriesForNewSection = categoryNamesBySection[newSection];
+  const categoriesForEditSection = categoryNamesBySection[editSection];
+
+  const [draggedCategory, setDraggedCategory] = useState<QuestionCategory | null>(null);
+  const [dragOverCategory, setDragOverCategory] = useState<string | null>(null);
 
   useEffect(() => {
     if (categoriesForNewSection.length === 0) {
@@ -132,7 +147,7 @@ const QuestionsPanel: React.FC<Props> = ({
   const addQuestion = async () => {
     if (!newText.trim()) return;
     if (categoriesForNewSection.length === 0 || !newCategory) {
-      showAlert('Primero agrega una categoria para esta seccion.');
+      showAlert('Primero agrega una categoría para esta sección.');
       setShowCategoryManager(true);
       return;
     }
@@ -168,7 +183,7 @@ const QuestionsPanel: React.FC<Props> = ({
   };
 
   const removeQuestion = async (id: number) => {
-    const confirmed = await showConfirm('Estas seguro de eliminar esta pregunta?', {
+    const confirmed = await showConfirm('¿Estás seguro de eliminar esta pregunta?', {
       title: 'Eliminar pregunta',
       confirmLabel: 'Eliminar',
       variant: 'danger',
@@ -182,7 +197,7 @@ const QuestionsPanel: React.FC<Props> = ({
     const name = normalizeCategory(newCategoryName);
     if (!name) return;
     if (categoryExists(name)) {
-      showAlert('La categoria ya existe.');
+      showAlert('La categoría ya existe.');
       return;
     }
     await onAddCategory(name, categoryManagerSection);
@@ -211,7 +226,7 @@ const QuestionsPanel: React.FC<Props> = ({
     const name = normalizeCategory(editCategoryName);
     if (!name) return;
     if (categoryExists(name) && name.toLowerCase() !== category.toLowerCase()) {
-      showAlert('La categoria ya existe.');
+      showAlert('La categoría ya existe.');
       return;
     }
     await onUpdateCategory(category, name);
@@ -225,17 +240,17 @@ const QuestionsPanel: React.FC<Props> = ({
     if (!categoryEntry) return;
     const remainingInSection = categories.filter(cat => cat.section === categoryEntry.section).length;
     if (remainingInSection <= 1) {
-      showAlert('Debes mantener al menos una categoria por seccion.');
+      showAlert('Debes mantener al menos una categoría por sección.');
       return;
     }
     const usageCount = questions.filter(q => q.category === category).length;
     const fallback = categories.find(cat => cat.name !== category && cat.section === categoryEntry.section)?.name || '';
     const message = usageCount > 0
-      ? `Esta categoria se usa en ${usageCount} preguntas. Se reasignaran a "${fallback}". Continuar?`
-      : 'Estas seguro de eliminar esta categoria?';
+      ? `Esta categoría se usa en ${usageCount} preguntas. Se reasignarán a "${fallback}". ¿Continuar?`
+      : '¿Estás seguro de eliminar esta categoría?';
 
     const confirmed = await showConfirm(message, {
-      title: 'Eliminar categoria',
+      title: 'Eliminar categoría',
       confirmLabel: 'Eliminar',
       variant: 'danger',
     });
@@ -246,8 +261,52 @@ const QuestionsPanel: React.FC<Props> = ({
     if (editCategory === category) setEditCategory(fallback);
   };
 
+  const handleCategoryDragStart = (category: QuestionCategory) => (event: React.DragEvent<HTMLDivElement>) => {
+    setDraggedCategory(category);
+    event.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleCategoryDragOver = (category: QuestionCategory) => (event: React.DragEvent<HTMLDivElement>) => {
+    if (!draggedCategory) return;
+    if (draggedCategory.section !== category.section) return;
+    if (draggedCategory.name === category.name) return;
+    event.preventDefault();
+    setDragOverCategory(category.name);
+    event.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleCategoryDrop = (category: QuestionCategory) => async (event: React.DragEvent<HTMLDivElement>) => {
+    if (!draggedCategory) return;
+    if (draggedCategory.section !== category.section) return;
+    if (draggedCategory.name === category.name) {
+      setDraggedCategory(null);
+      setDragOverCategory(null);
+      return;
+    }
+    event.preventDefault();
+    const sectionCategories = categoriesBySection[category.section];
+    const reordered = [...sectionCategories];
+    const fromIndex = reordered.findIndex(item => item.name === draggedCategory.name);
+    const toIndex = reordered.findIndex(item => item.name === category.name);
+    if (fromIndex < 0 || toIndex < 0) {
+      setDraggedCategory(null);
+      setDragOverCategory(null);
+      return;
+    }
+    const [moved] = reordered.splice(fromIndex, 1);
+    reordered.splice(toIndex, 0, moved);
+    setDraggedCategory(null);
+    setDragOverCategory(null);
+    await onUpdateCategoryOrder(category.section, reordered.map(item => item.name));
+  };
+
+  const handleCategoryDragEnd = () => {
+    setDraggedCategory(null);
+    setDragOverCategory(null);
+  };
+
   const getSectionLabel = (section: QuestionSection) =>
-    SECTION_OPTIONS.find(option => option.value === section)?.label || section;
+    sectionOptions.find(option => option.value === section)?.label || section;
   const getTypeLabel = (type: QuestionType) =>
     QUESTION_TYPE_OPTIONS.find(option => option.value === type)?.label || type;
 
@@ -276,7 +335,7 @@ const QuestionsPanel: React.FC<Props> = ({
               onChange={(e) => setNewSection(e.target.value as QuestionSection)}
               className="px-4 py-2 rounded-lg border bg-white"
             >
-              {SECTION_OPTIONS.map(section => (
+              {sectionOptions.map(section => (
                 <option key={section.value} value={section.value}>{section.label}</option>
               ))}
             </select>
@@ -288,7 +347,7 @@ const QuestionsPanel: React.FC<Props> = ({
               {categoriesForNewSection.map(cat => (
                 <option key={cat} value={cat}>{cat}</option>
               ))}
-              <option value={ADD_CATEGORY_VALUE}>Agregar categoria...</option>
+              <option value={ADD_CATEGORY_VALUE}>Agregar categoría...</option>
             </select>
             <select
               value={newType}
@@ -325,13 +384,13 @@ const QuestionsPanel: React.FC<Props> = ({
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-lg font-bold text-slate-800">Listado</h3>
-            <p className="text-xs text-slate-500">Preguntas separadas por seccion.</p>
+            <p className="text-xs text-slate-500">Preguntas separadas por sección.</p>
           </div>
           <span className="text-sm text-slate-500">{questions.length} preguntas</span>
         </div>
 
         <div className="space-y-6">
-          {SECTION_OPTIONS.map(section => {
+          {sectionOptions.map(section => {
             const sectionQuestions = questions.filter(question => question.section === section.value);
             return (
               <div key={section.value}>
@@ -364,7 +423,7 @@ const QuestionsPanel: React.FC<Props> = ({
                                   onChange={(e) => setEditSection(e.target.value as QuestionSection)}
                                   className="px-3 py-2 text-sm border rounded-lg bg-white"
                                 >
-                                  {SECTION_OPTIONS.map(option => (
+                                  {sectionOptions.map(option => (
                                     <option key={option.value} value={option.value}>{option.label}</option>
                                   ))}
                                 </select>
@@ -376,7 +435,7 @@ const QuestionsPanel: React.FC<Props> = ({
                                   {categoriesForEditSection.map(cat => (
                                     <option key={cat} value={cat}>{cat}</option>
                                   ))}
-                                  <option value={ADD_CATEGORY_VALUE}>Agregar categoria...</option>
+                                  <option value={ADD_CATEGORY_VALUE}>Agregar categoría...</option>
                                 </select>
                                 <select
                                   value={editType}
@@ -454,8 +513,8 @@ const QuestionsPanel: React.FC<Props> = ({
           <div className="flex items-center gap-3">
             <Settings className="text-[#005187]" />
             <div>
-              <h3 className="text-lg font-bold text-slate-800">Categorias</h3>
-              <p className="text-sm text-slate-500">Agrega, edita o elimina categorias.</p>
+              <h3 className="text-lg font-bold text-slate-800">Categorías</h3>
+              <p className="text-sm text-slate-500">Agrega, edita o elimina categorías.</p>
             </div>
           </div>
           <button
@@ -471,7 +530,7 @@ const QuestionsPanel: React.FC<Props> = ({
             <div className="grid grid-cols-1 sm:grid-cols-[1fr,220px,180px] gap-3 bg-slate-50 p-4 rounded-xl">
               <input
                 type="text"
-                placeholder="Nueva categoria"
+                placeholder="Nueva categoría"
                 value={newCategoryName}
                 onChange={(e) => setNewCategoryName(e.target.value)}
                 className="px-3 py-2 text-sm border rounded-lg"
@@ -481,7 +540,7 @@ const QuestionsPanel: React.FC<Props> = ({
                 onChange={(e) => setCategoryManagerSection(e.target.value as QuestionSection)}
                 className="px-3 py-2 text-sm border rounded-lg bg-white"
               >
-                {SECTION_OPTIONS.map(option => (
+                {sectionOptions.map(option => (
                   <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
               </select>
@@ -489,55 +548,78 @@ const QuestionsPanel: React.FC<Props> = ({
                 onClick={addCategory}
                 className="flex items-center justify-center gap-2 bg-[#005187] text-white font-semibold py-2 rounded-lg"
               >
-                <PlusCircle size={16} /> Agregar categoria
+                <PlusCircle size={16} /> Agregar categoría
               </button>
             </div>
 
-            <div className="divide-y">
-              {categories.map(category => {
-                const usageCount = questions.filter(q => q.category === category.name).length;
+            <div className="space-y-6">
+              {sectionOptions.map(section => {
+                const sectionCategories = categoriesBySection[section.value];
                 return (
-                  <div key={category.name} className="py-3 flex items-center justify-between">
-                    {editingCategory === category.name ? (
-                      <div className="flex-1 grid grid-cols-1 sm:grid-cols-[1fr,140px] gap-2 mr-2">
-                        <input
-                          value={editCategoryName}
-                          onChange={(e) => setEditCategoryName(e.target.value)}
-                          className="px-3 py-2 text-sm border rounded-lg"
-                        />
-                        <span className="text-xs text-slate-500 self-center">{usageCount} preguntas</span>
-                      </div>
-                    ) : (
-                      <div>
-                        <p className="font-medium text-slate-800">{category.name}</p>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-slate-500">{usageCount} preguntas</span>
-                          <span className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
-                            {getSectionLabel(category.section)}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                    <div className="flex items-center gap-2">
-                      {editingCategory === category.name ? (
-                        <>
-                          <button onClick={() => saveCategoryEdit(category.name)} className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg">
-                            <Check size={18} />
-                          </button>
-                          <button onClick={cancelCategoryEdit} className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg">
-                            <X size={18} />
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button onClick={() => startCategoryEdit(category.name)} className="p-2 text-slate-400 hover:text-[#005187] hover:bg-[#eef5fa] rounded-lg">
-                            <Edit2 size={16} />
-                          </button>
-                          <button onClick={() => removeCategory(category.name)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg">
-                            <Trash2 size={16} />
-                          </button>
-                        </>
-                      )}
+                  <div key={section.value}>
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-sm font-semibold text-slate-700">{section.label}</h4>
+                      <span className="text-xs text-slate-500">{sectionCategories.length} categorias</span>
+                    </div>
+                    <div className="divide-y">
+                      {sectionCategories.map(category => {
+                        const usageCount = questions.filter(q => q.category === category.name).length;
+                        const isDragOver = dragOverCategory === category.name;
+                        const isDragging = draggedCategory?.name === category.name;
+                        return (
+                          <div
+                            key={category.name}
+                            className={`py-3 flex items-center justify-between ${isDragOver ? 'bg-[#eef5fa]' : ''} ${isDragging ? 'opacity-60' : ''} ${editingCategory === category.name ? '' : 'cursor-grab'}`}
+                            draggable={editingCategory !== category.name}
+                            onDragStart={handleCategoryDragStart(category)}
+                            onDragOver={handleCategoryDragOver(category)}
+                            onDrop={handleCategoryDrop(category)}
+                            onDragEnd={handleCategoryDragEnd}
+                          >
+                            {editingCategory === category.name ? (
+                              <div className="flex-1 grid grid-cols-1 sm:grid-cols-[1fr,140px] gap-2 mr-2">
+                                <input
+                                  value={editCategoryName}
+                                  onChange={(e) => setEditCategoryName(e.target.value)}
+                                  className="px-3 py-2 text-sm border rounded-lg"
+                                />
+                                <span className="text-xs text-slate-500 self-center">{usageCount} preguntas</span>
+                              </div>
+                            ) : (
+                              <div>
+                                <p className="font-medium text-slate-800">{category.name}</p>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-slate-500">{usageCount} preguntas</span>
+                                  <span className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                                    {getSectionLabel(category.section)}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+                            <div className="flex items-center gap-2">
+                              {editingCategory === category.name ? (
+                                <>
+                                  <button onClick={() => saveCategoryEdit(category.name)} className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg">
+                                    <Check size={18} />
+                                  </button>
+                                  <button onClick={cancelCategoryEdit} className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg">
+                                    <X size={18} />
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <button onClick={() => startCategoryEdit(category.name)} className="p-2 text-slate-400 hover:text-[#005187] hover:bg-[#eef5fa] rounded-lg">
+                                    <Edit2 size={16} />
+                                  </button>
+                                  <button onClick={() => removeCategory(category.name)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg">
+                                    <Trash2 size={16} />
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 );
@@ -546,7 +628,7 @@ const QuestionsPanel: React.FC<Props> = ({
           </div>
         ) : (
           <div className="text-sm text-slate-500 bg-slate-50 rounded-xl p-4">
-            Usa "Agregar categoria" desde el selector de preguntas para abrir la gestion.
+            Usa "Agregar categoría" desde el selector de preguntas para abrir la gestión.
           </div>
         )}
       </section>
@@ -555,4 +637,5 @@ const QuestionsPanel: React.FC<Props> = ({
 };
 
 export default QuestionsPanel;
+
 

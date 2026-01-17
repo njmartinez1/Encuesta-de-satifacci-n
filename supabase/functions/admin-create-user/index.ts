@@ -55,7 +55,7 @@ serve(async (req) => {
     });
   }
 
-  let payload: { email?: string; name?: string; role?: string; is_admin?: boolean };
+  let payload: { email?: string; name?: string; role?: string; group?: string; campus?: string; is_admin?: boolean };
   try {
     payload = await req.json();
   } catch {
@@ -68,6 +68,8 @@ serve(async (req) => {
   const email = (payload.email ?? "").trim().toLowerCase();
   const name = (payload.name ?? "").trim();
   const role = (payload.role ?? "").trim();
+  const groupName = (payload.group ?? "").trim();
+  const campus = (payload.campus ?? "").trim();
   const isAdmin = Boolean(payload.is_admin);
 
   if (!email || !name || !role) {
@@ -100,12 +102,14 @@ serve(async (req) => {
     email,
     name,
     role,
+    group_name: groupName || null,
+    campus: campus || null,
     is_admin: isAdmin,
   });
 
   return new Response(
     JSON.stringify({
-      profile: { id: userId, email, name, role, is_admin: isAdmin },
+      profile: { id: userId, email, name, role, group_name: groupName || null, campus: campus || null, is_admin: isAdmin },
     }),
     { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
   );

@@ -1,8 +1,9 @@
-
+﻿
 import React, { useState } from 'react';
 import { Employee, Evaluation, Question } from '../types.ts';
 import { Save } from 'lucide-react';
 import { useModal } from './ModalProvider.tsx';
+import { getScaleScore } from '../scoreUtils.ts';
 
 console.log("--> [EvaluationForm.tsx] Módulo cargado");
 
@@ -118,16 +119,20 @@ const EvaluationForm: React.FC<Props> = ({ evaluatorId, targetEmployee, question
                     className="grid gap-2 w-full"
                     style={{ gridTemplateColumns: `repeat(${scaleOptions.length}, minmax(0, 1fr))` }}
                   >
-                    {scaleOptions.map((label, optionIndex) => (
-                      <button
-                        key={`${q.id}-${optionIndex}`}
-                        type="button"
-                        onClick={() => handleAnswerChange(q.id, optionIndex + 1)}
-                        className={`w-full py-3 px-2 text-xs sm:text-sm leading-snug whitespace-normal rounded-lg border-2 transition-all ${answers[q.id] === optionIndex + 1 ? 'bg-[#eef5fa] border-[#005187] text-[#00406b]' : 'bg-white border-slate-200'}`}
-                      >
-                        {label}
-                      </button>
-                    ))}
+                    {scaleOptions.map((label, optionIndex) => {
+                      const optionValue = getScaleScore(optionIndex, scaleOptions.length);
+                      const isSelected = answers[q.id] === optionValue;
+                      return (
+                        <button
+                          key={`${q.id}-${optionIndex}`}
+                          type="button"
+                          onClick={() => handleAnswerChange(q.id, optionValue)}
+                          className={`w-full py-3 px-2 text-xs sm:text-sm leading-snug whitespace-normal rounded-lg border-2 transition-all ${isSelected ? 'bg-[#eef5fa] border-[#005187] text-[#00406b]' : 'bg-white border-slate-200'}`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>

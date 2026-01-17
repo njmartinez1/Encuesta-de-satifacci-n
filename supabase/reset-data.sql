@@ -21,4 +21,5 @@ truncate table public.assignments restart identity cascade;
 truncate table public.evaluator_questions restart identity cascade;
 truncate table public.questions restart identity cascade;
 truncate table public.question_categories restart identity cascade;
+truncate table public.question_sections restart identity cascade;
 truncate table public.allowed_emails restart identity cascade;
