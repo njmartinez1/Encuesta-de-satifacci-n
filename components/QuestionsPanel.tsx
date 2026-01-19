@@ -7,11 +7,11 @@ interface Props {
   questions: Question[];
   categories: QuestionCategory[];
   questionSections: QuestionSectionOption[];
-  onAddQuestion: (text: string, category: string, section: QuestionSection, type: QuestionType, options: string[]) => Promise<void>;
-  onUpdateQuestion: (id: number, text: string, category: string, section: QuestionSection, type: QuestionType, options: string[]) => Promise<void>;
+  onAddQuestion: (text: string, category: string, section: QuestionSection, type: QuestionType, options: string[], isRequired: boolean) => Promise<void>;
+  onUpdateQuestion: (id: number, text: string, category: string, section: QuestionSection, type: QuestionType, options: string[], isRequired: boolean) => Promise<void>;
   onDeleteQuestion: (id: number) => Promise<void>;
-  onAddCategory: (name: string, section: QuestionSection) => Promise<void>;
-  onUpdateCategory: (prevName: string, nextName: string) => Promise<void>;
+  onAddCategory: (name: string, section: QuestionSection, description?: string) => Promise<void>;
+  onUpdateCategory: (prevName: string, nextName: string, description?: string) => Promise<void>;
   onDeleteCategory: (name: string, fallback: string) => Promise<void>;
   onUpdateCategoryOrder: (section: QuestionSection, orderedNames: string[]) => Promise<void>;
 }
@@ -27,6 +27,14 @@ const DEFAULT_SCALE_OPTIONS = [
   'De acuerdo',
   'Totalmente de acuerdo',
 ];
+
+const OPTIONAL_CATEGORIES = new Set(['alimentacion', 'enfermeria', 'seguros']);
+const normalizeCategoryName = (value: string) => value
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .trim()
+  .toLowerCase();
+const isOptionalCategory = (category: string) => OPTIONAL_CATEGORIES.has(normalizeCategoryName(category));
 
 const QuestionsPanel: React.FC<Props> = ({
   questions,
@@ -47,6 +55,7 @@ const QuestionsPanel: React.FC<Props> = ({
   const [newSection, setNewSection] = useState<QuestionSection>('peer');
   const [newType, setNewType] = useState<QuestionType>('scale');
   const [newOptions, setNewOptions] = useState(DEFAULT_SCALE_OPTIONS.join(', '));
+  const [newIsRequired, setNewIsRequired] = useState(true);
   const [showCategoryManager, setShowCategoryManager] = useState(false);
   const [categoryManagerSection, setCategoryManagerSection] = useState<QuestionSection>('peer');
 
@@ -56,10 +65,13 @@ const QuestionsPanel: React.FC<Props> = ({
   const [editSection, setEditSection] = useState<QuestionSection>('peer');
   const [editType, setEditType] = useState<QuestionType>('scale');
   const [editOptions, setEditOptions] = useState(DEFAULT_SCALE_OPTIONS.join(', '));
+  const [editIsRequired, setEditIsRequired] = useState(true);
 
   const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryDescription, setNewCategoryDescription] = useState('');
   const [editingCategory, setEditingCategory] = useState<string | null>(null);
   const [editCategoryName, setEditCategoryName] = useState('');
+  const [editCategoryDescription, setEditCategoryDescription] = useState('');
 
   const categoriesBySection = useMemo(() => {
     const grouped: Record<QuestionSection, QuestionCategory[]> = { peer: [], internal: [] };
@@ -86,6 +98,10 @@ const QuestionsPanel: React.FC<Props> = ({
 
   const categoriesForNewSection = categoryNamesBySection[newSection];
   const categoriesForEditSection = categoryNamesBySection[editSection];
+  const isNewCategoryOptional = isOptionalCategory(newCategory);
+  const isEditCategoryOptional = isOptionalCategory(editCategory);
+  const effectiveNewIsRequired = isNewCategoryOptional ? false : newIsRequired;
+  const effectiveEditIsRequired = isEditCategoryOptional ? false : editIsRequired;
 
   const [draggedCategory, setDraggedCategory] = useState<QuestionCategory | null>(null);
   const [dragOverCategory, setDragOverCategory] = useState<string | null>(null);
@@ -152,8 +168,9 @@ const QuestionsPanel: React.FC<Props> = ({
       return;
     }
     const options = ensureOptions(newType, newOptions);
-    await onAddQuestion(newText.trim(), newCategory, newSection, newType, options);
+    await onAddQuestion(newText.trim(), newCategory, newSection, newType, options, effectiveNewIsRequired);
     setNewText('');
+    setNewIsRequired(true);
     setNewCategory(categoriesForNewSection[0] || newCategory);
   };
 
@@ -164,6 +181,7 @@ const QuestionsPanel: React.FC<Props> = ({
     setEditSection(question.section);
     setEditType(question.type ?? 'scale');
     setEditOptions(formatOptions(question.options));
+    setEditIsRequired(question.isRequired);
   };
 
   const cancelEditing = () => {
@@ -173,12 +191,13 @@ const QuestionsPanel: React.FC<Props> = ({
     setEditSection('peer');
     setEditType('scale');
     setEditOptions(formatOptions());
+    setEditIsRequired(true);
   };
 
   const saveEdit = async (id: number) => {
     if (!editText.trim()) return;
     const options = ensureOptions(editType, editOptions);
-    await onUpdateQuestion(id, editText.trim(), editCategory, editSection, editType, options);
+    await onUpdateQuestion(id, editText.trim(), editCategory, editSection, editType, options, effectiveEditIsRequired);
     setEditingId(null);
   };
 
@@ -200,7 +219,7 @@ const QuestionsPanel: React.FC<Props> = ({
       showAlert('La categoría ya existe.');
       return;
     }
-    await onAddCategory(name, categoryManagerSection);
+    await onAddCategory(name, categoryManagerSection, newCategoryDescription);
     if (categoryManagerSection === newSection) {
       setNewCategory(name);
     }
@@ -208,17 +227,21 @@ const QuestionsPanel: React.FC<Props> = ({
       setEditCategory(name);
     }
     setNewCategoryName('');
+    setNewCategoryDescription('');
     setShowCategoryManager(true);
   };
 
   const startCategoryEdit = (category: string) => {
+    const entry = categories.find(cat => cat.name === category);
     setEditingCategory(category);
     setEditCategoryName(category);
+    setEditCategoryDescription(entry?.description ?? '');
     setShowCategoryManager(true);
   };
 
   const cancelCategoryEdit = () => {
     setEditingCategory(null);
+    setEditCategoryDescription('');
     setEditCategoryName('');
   };
 
@@ -229,10 +252,11 @@ const QuestionsPanel: React.FC<Props> = ({
       showAlert('La categoría ya existe.');
       return;
     }
-    await onUpdateCategory(category, name);
+    await onUpdateCategory(category, name, editCategoryDescription);
     if (newCategory === category) setNewCategory(name);
     if (editCategory === category) setEditCategory(name);
     setEditingCategory(null);
+    setEditCategoryDescription('');
   };
 
   const removeCategory = async (category: string) => {
@@ -314,7 +338,7 @@ const QuestionsPanel: React.FC<Props> = ({
     <div className="space-y-8">
       <section className="bg-white rounded-2xl shadow-sm border p-6">
         <div className="flex items-center gap-3 mb-6">
-          <HelpCircle className="text-[#005187]" />
+          <HelpCircle className="text-[var(--color-primary)]" />
           <div>
             <h2 className="text-xl font-bold text-slate-800">Preguntas</h2>
             <p className="text-sm text-slate-500">Crea y administra las preguntas activas.</p>
@@ -327,7 +351,7 @@ const QuestionsPanel: React.FC<Props> = ({
             placeholder="Texto de la pregunta"
             value={newText}
             onChange={(e) => setNewText(e.target.value)}
-            className="w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-[#005187] outline-none"
+            className="w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-[var(--color-primary)] outline-none"
           />
           <div className="grid grid-cols-1 lg:grid-cols-[200px,220px,180px,160px] gap-4">
             <select
@@ -360,11 +384,21 @@ const QuestionsPanel: React.FC<Props> = ({
             </select>
             <button
               onClick={addQuestion}
-              className="flex items-center justify-center gap-2 bg-[#005187] text-white font-bold py-2 rounded-lg"
+              className="flex items-center justify-center gap-2 bg-[var(--color-primary)] text-white font-bold py-2 rounded-lg"
             >
               <PlusCircle size={18} /> Agregar
             </button>
           </div>
+          <label className="flex items-center gap-2 text-sm text-slate-600">
+            <input
+              type="checkbox"
+              checked={effectiveNewIsRequired}
+              onChange={(e) => setNewIsRequired(e.target.checked)}
+              disabled={isNewCategoryOptional}
+              className="h-4 w-4 text-[var(--color-primary)]"
+            />
+            Obligatoria
+          </label>
           {newType === 'scale' && (
             <div className="bg-white border rounded-lg p-3">
               <label className="text-xs font-semibold text-slate-600">Opciones (separadas por coma)</label>
@@ -406,7 +440,7 @@ const QuestionsPanel: React.FC<Props> = ({
                   <div className="divide-y">
                     {sectionQuestions.map(question => (
                       <div key={question.id} className="py-4 flex items-start gap-4">
-                        <div className="w-10 h-10 rounded-full bg-[#eef5fa] text-[#005187] flex items-center justify-center font-bold text-sm">
+                        <div className="w-10 h-10 rounded-full bg-[var(--color-primary-tint)] text-[var(--color-primary)] flex items-center justify-center font-bold text-sm">
                           P{question.id}
                         </div>
                         <div className="flex-1">
@@ -447,6 +481,16 @@ const QuestionsPanel: React.FC<Props> = ({
                                   ))}
                                 </select>
                               </div>
+                              <label className="flex items-center gap-2 text-xs text-slate-600">
+                                <input
+                                  type="checkbox"
+                                  checked={effectiveEditIsRequired}
+                                  onChange={(e) => setEditIsRequired(e.target.checked)}
+                                  disabled={isEditCategoryOptional}
+                                  className="h-4 w-4 text-[var(--color-primary)]"
+                                />
+                                Obligatoria
+                              </label>
                               {editType === 'scale' && (
                                 <div className="bg-white border rounded-lg p-3">
                                   <label className="text-xs font-semibold text-slate-600">Opciones (separadas por coma)</label>
@@ -470,8 +514,11 @@ const QuestionsPanel: React.FC<Props> = ({
                                 <span className="inline-flex text-xs font-semibold px-2 py-1 rounded-full bg-white text-slate-600 border">
                                   {question.category}
                                 </span>
-                                <span className="inline-flex text-xs font-semibold px-2 py-1 rounded-full bg-[#eef5fa] text-[#005187]">
+                                <span className="inline-flex text-xs font-semibold px-2 py-1 rounded-full bg-[var(--color-primary-tint)] text-[var(--color-primary)]">
                                   {getTypeLabel(question.type)}
+                                </span>
+                                <span className={`inline-flex text-xs font-semibold px-2 py-1 rounded-full ${question.isRequired ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                  {question.isRequired ? 'Obligatoria' : 'Opcional'}
                                 </span>
                               </div>
                             </>
@@ -489,7 +536,7 @@ const QuestionsPanel: React.FC<Props> = ({
                             </>
                           ) : (
                             <>
-                              <button onClick={() => startEditing(question)} className="p-2 text-slate-400 hover:text-[#005187] hover:bg-[#eef5fa] rounded-lg">
+                              <button onClick={() => startEditing(question)} className="p-2 text-slate-400 hover:text-[var(--color-primary)] hover:bg-[var(--color-primary-tint)] rounded-lg">
                                 <Edit2 size={16} />
                               </button>
                               <button onClick={() => removeQuestion(question.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg">
@@ -511,7 +558,7 @@ const QuestionsPanel: React.FC<Props> = ({
       <section className="bg-white rounded-2xl shadow-sm border p-6">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <Settings className="text-[#005187]" />
+            <Settings className="text-[var(--color-primary)]" />
             <div>
               <h3 className="text-lg font-bold text-slate-800">Categorías</h3>
               <p className="text-sm text-slate-500">Agrega, edita o elimina categorías.</p>
@@ -519,7 +566,7 @@ const QuestionsPanel: React.FC<Props> = ({
           </div>
           <button
             onClick={() => setShowCategoryManager(prev => !prev)}
-            className="text-xs font-semibold text-[#005187] hover:text-[#003a5e]"
+            className="text-xs font-semibold text-[var(--color-primary)] hover:text-[var(--color-primary-darker)]"
           >
             {showCategoryManager ? 'Ocultar' : 'Gestionar'}
           </button>
@@ -546,11 +593,19 @@ const QuestionsPanel: React.FC<Props> = ({
               </select>
               <button
                 onClick={addCategory}
-                className="flex items-center justify-center gap-2 bg-[#005187] text-white font-semibold py-2 rounded-lg"
+                className="flex items-center justify-center gap-2 bg-[var(--color-primary)] text-white font-semibold py-2 rounded-lg"
               >
                 <PlusCircle size={16} /> Agregar categoría
               </button>
             </div>
+            <textarea
+              placeholder="Descripcion (opcional)"
+              value={newCategoryDescription}
+              onChange={(e) => setNewCategoryDescription(e.target.value)}
+              className="w-full px-3 py-2 text-sm border rounded-lg"
+              rows={2}
+            />
+
 
             <div className="space-y-6">
               {sectionOptions.map(section => {
@@ -569,7 +624,7 @@ const QuestionsPanel: React.FC<Props> = ({
                         return (
                           <div
                             key={category.name}
-                            className={`py-3 flex items-center justify-between ${isDragOver ? 'bg-[#eef5fa]' : ''} ${isDragging ? 'opacity-60' : ''} ${editingCategory === category.name ? '' : 'cursor-grab'}`}
+                            className={`py-3 flex items-center justify-between ${isDragOver ? 'bg-[var(--color-primary-tint)]' : ''} ${isDragging ? 'opacity-60' : ''} ${editingCategory === category.name ? '' : 'cursor-grab'}`}
                             draggable={editingCategory !== category.name}
                             onDragStart={handleCategoryDragStart(category)}
                             onDragOver={handleCategoryDragOver(category)}
@@ -577,18 +632,28 @@ const QuestionsPanel: React.FC<Props> = ({
                             onDragEnd={handleCategoryDragEnd}
                           >
                             {editingCategory === category.name ? (
-                              <div className="flex-1 grid grid-cols-1 sm:grid-cols-[1fr,140px] gap-2 mr-2">
+                              <div className="flex-1 space-y-2 mr-2">
                                 <input
                                   value={editCategoryName}
                                   onChange={(e) => setEditCategoryName(e.target.value)}
                                   className="px-3 py-2 text-sm border rounded-lg"
                                 />
-                                <span className="text-xs text-slate-500 self-center">{usageCount} preguntas</span>
+                                <textarea
+                                  value={editCategoryDescription}
+                                  onChange={(e) => setEditCategoryDescription(e.target.value)}
+                                  placeholder="Descripcion (opcional)"
+                                  className="px-3 py-2 text-sm border rounded-lg"
+                                  rows={2}
+                                />
+                                <span className="text-xs text-slate-500">{usageCount} preguntas</span>
                               </div>
                             ) : (
                               <div>
                                 <p className="font-medium text-slate-800">{category.name}</p>
-                                <div className="flex items-center gap-2">
+                                {category.description?.trim() ? (
+                                  <p className="text-xs text-slate-500 mt-1">{category.description}</p>
+                                ) : null}
+                                <div className="flex items-center gap-2 mt-1">
                                   <span className="text-xs text-slate-500">{usageCount} preguntas</span>
                                   <span className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
                                     {getSectionLabel(category.section)}
@@ -608,7 +673,7 @@ const QuestionsPanel: React.FC<Props> = ({
                                 </>
                               ) : (
                                 <>
-                                  <button onClick={() => startCategoryEdit(category.name)} className="p-2 text-slate-400 hover:text-[#005187] hover:bg-[#eef5fa] rounded-lg">
+                                  <button onClick={() => startCategoryEdit(category.name)} className="p-2 text-slate-400 hover:text-[var(--color-primary)] hover:bg-[var(--color-primary-tint)] rounded-lg">
                                     <Edit2 size={16} />
                                   </button>
                                   <button onClick={() => removeCategory(category.name)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg">

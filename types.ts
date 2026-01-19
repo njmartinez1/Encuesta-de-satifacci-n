@@ -17,6 +17,7 @@ export interface Question {
   category: string;
   section: QuestionSection;
   type: QuestionType;
+  isRequired: boolean;
   options?: string[];
   sortOrder?: number;
 }
@@ -25,6 +26,7 @@ export interface QuestionCategory {
   name: string;
   section: QuestionSection;
   sortOrder?: number;
+  description?: string | null;
 }
 
 export interface QuestionSectionOption {

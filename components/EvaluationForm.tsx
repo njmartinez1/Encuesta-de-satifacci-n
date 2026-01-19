@@ -11,10 +11,12 @@ interface Props {
   evaluatorId: string;
   targetEmployee: Employee;
   questions: Question[];
+  sectionTitle?: string;
+  sectionDescription?: string;
   onSave: (evaluation: Evaluation) => Promise<boolean>;
 }
 
-const EvaluationForm: React.FC<Props> = ({ evaluatorId, targetEmployee, questions, onSave }) => {
+const EvaluationForm: React.FC<Props> = ({ evaluatorId, targetEmployee, questions, sectionTitle, sectionDescription, onSave }) => {
   const { showAlert } = useModal();
   const [answers, setAnswers] = useState<{ [key: number]: number | string }>({});
   const [comments, setComments] = useState('');
@@ -24,21 +26,24 @@ const EvaluationForm: React.FC<Props> = ({ evaluatorId, targetEmployee, question
     setAnswers(prev => ({ ...prev, [questionId]: value }));
   };
 
+  const isQuestionAnswered = (question: Question, value: number | string | undefined) => {
+    if (question.type === 'text') {
+      return typeof value === 'string' && value.trim().length > 0;
+    }
+    return typeof value === 'number';
+  };
+  const requiredQuestions = questions.filter(question => question.isRequired);
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (questions.length === 0) {
       showAlert("No hay preguntas asignadas para este evaluador.");
       return;
     }
-    const hasAllAnswers = questions.every(question => {
-      const value = answers[question.id];
-      if (question.type === 'text') {
-        return typeof value === 'string' && value.trim().length > 0;
-      }
-      return typeof value === 'number';
-    });
-    if (!hasAllAnswers) {
-      showAlert("Por favor, responde todas las preguntas antes de continuar.");
+    const hasAllRequiredAnswers = requiredQuestions.every(question =>
+      isQuestionAnswered(question, answers[question.id])
+    );
+    if (!hasAllRequiredAnswers) {
+      showAlert("Por favor, responde las preguntas obligatorias antes de continuar.");
       return;
     }
 
@@ -61,16 +66,12 @@ const EvaluationForm: React.FC<Props> = ({ evaluatorId, targetEmployee, question
     }
   };
 
-  const answeredCount = questions.filter(question => {
-    const value = answers[question.id];
-    if (question.type === 'text') {
-      return typeof value === 'string' && value.trim().length > 0;
-    }
-    return typeof value === 'number';
-  }).length;
-  const progress = questions.length > 0
-    ? Math.round((answeredCount / questions.length) * 100)
-    : 0;
+  const answeredCount = requiredQuestions.filter(question =>
+    isQuestionAnswered(question, answers[question.id])
+  ).length;
+  const progress = requiredQuestions.length > 0
+    ? Math.round((answeredCount / requiredQuestions.length) * 100)
+    : 100;
   const defaultScaleOptions = [
     'Totalmente en desacuerdo',
     'En desacuerdo',
@@ -80,22 +81,30 @@ const EvaluationForm: React.FC<Props> = ({ evaluatorId, targetEmployee, question
 
   return (
     <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-      <div className="bg-[#005187] p-6 text-white">
+      <div className="bg-[var(--color-primary)] p-6 text-white">
         <div className="flex justify-between items-end mb-4">
           <div>
             <h2 className="text-2xl font-bold">Evaluando a {targetEmployee.name}</h2>
-            <p className="text-[#cfe0ea] opacity-80">{targetEmployee.role}</p>
+            <p className="text-[var(--color-primary-soft)] opacity-80">{targetEmployee.role}</p>
           </div>
           <div className="text-right">
             <span className="text-3xl font-bold">{progress}%</span>
           </div>
         </div>
-        <div className="w-full bg-[#003a5e] rounded-full h-2">
+        <div className="w-full bg-[var(--color-primary-darker)] rounded-full h-2">
           <div className="bg-emerald-400 h-2 rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="p-8">
+        {sectionTitle ? (
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold text-slate-800">{sectionTitle}</h3>
+            {sectionDescription ? (
+              <p className="text-sm text-slate-500 mt-1">{sectionDescription}</p>
+            ) : null}
+          </div>
+        ) : null}
         <div className="space-y-10">
           {questions.map((q, index) => {
             const isTextQuestion = q.type === 'text';
@@ -104,7 +113,14 @@ const EvaluationForm: React.FC<Props> = ({ evaluatorId, targetEmployee, question
               <div key={q.id} className="border-b border-slate-100 pb-8 last:border-0">
                 <div className="flex items-start gap-4 mb-5">
                   <span className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center font-bold">{index + 1}</span>
-                  <h3 className="text-lg font-medium text-slate-800">{q.text}</h3>
+                  <div className="flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-lg font-medium text-slate-800">{q.text}</h3>
+                      {!q.isRequired && (
+                        <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-1 rounded-full bg-amber-100 text-amber-700">Opcional</span>
+                      )}
+                    </div>
+                  </div>
                 </div>
                 {isTextQuestion ? (
                   <textarea
@@ -127,7 +143,7 @@ const EvaluationForm: React.FC<Props> = ({ evaluatorId, targetEmployee, question
                           key={`${q.id}-${optionIndex}`}
                           type="button"
                           onClick={() => handleAnswerChange(q.id, optionValue)}
-                          className={`w-full py-3 px-2 text-xs sm:text-sm leading-snug whitespace-normal rounded-lg border-2 transition-all ${isSelected ? 'bg-[#eef5fa] border-[#005187] text-[#00406b]' : 'bg-white border-slate-200'}`}
+                          className={`w-full py-3 px-2 text-xs sm:text-sm leading-snug whitespace-normal rounded-lg border-2 transition-all ${isSelected ? 'bg-[var(--color-primary-tint)] border-[var(--color-primary)] text-[var(--color-primary-dark)]' : 'bg-white border-slate-200'}`}
                         >
                           {label}
                         </button>
@@ -153,7 +169,7 @@ const EvaluationForm: React.FC<Props> = ({ evaluatorId, targetEmployee, question
           />
         </div>
         <div className="mt-10 flex justify-end">
-          <button type="submit" disabled={isSubmitting} className="bg-[#005187] text-white px-8 py-3 rounded-xl flex items-center gap-2">
+          <button type="submit" disabled={isSubmitting} className="bg-[var(--color-primary)] text-white px-8 py-3 rounded-xl flex items-center gap-2">
             <Save size={20} /> Guardar Evaluación
           </button>
         </div>

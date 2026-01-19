@@ -292,7 +292,7 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
 
   const getQuestionTotalsForCategory = (categoryName: string) => {     if (!categoryName) return [];     const categoryQuestions = internalQuestions.filter(question =>       question.category === categoryName && question.type !== 'text'     );     if (categoryQuestions.length === 0) return [];      const totals = new Map<number, number>();     evaluations.forEach((evaluation) => {       categoryQuestions.forEach((question) => {         const value = evaluation.answers[question.id];         if (typeof value === 'number') {           totals.set(question.id, (totals.get(question.id) || 0) + getPointValue(question, value));         }       });     });      return categoryQuestions.map(question => {       const total = totals.get(question.id);       if (typeof total !== 'number') {         return { id: question.id, text: question.text, total: null };       }       return {         id: question.id,         text: question.text,         total,       };     });   };
 
-  const getPeerQuestionTotalsForEmployee = (empId: string) => {     const relevant = evaluations.filter(evaluation => (       evaluation.evaluatedId === empId       && Object.keys(evaluation.answers).some(questionId => peerQuestionIds.has(Number(questionId)))     ));     const totals = new Map<number, number>();      relevant.forEach(evaluation => {       peerQuestions.forEach(question => {         const value = evaluation.answers[question.id];         if (typeof value === 'number') {           totals.set(question.id, (totals.get(question.id) || 0) + getPointValue(question, value));         }       });     });      const totalsByQuestion = peerQuestions.map(question => {       const total = totals.get(question.id);       return typeof total === 'number' ? total : null;     });     const numericTotals = totalsByQuestion.filter((value): value is number => typeof value === 'number');     const totalOverall = numericTotals.length > 0       ? numericTotals.reduce((sum, value) => sum + value, 0)       : null;     return {       hasData: relevant.length > 0 && numericTotals.length > 0,       totals: totalsByQuestion,       totalOverall,     };   };
+  const getPeerQuestionTotalsForEmployee = (empId: string) => {     const relevant = evaluations.filter(evaluation => (       evaluation.evaluatedId === empId       && Object.keys(evaluation.answers).some(questionId => peerQuestionIds.has(Number(questionId)))     ));     const totals = new Map<number, number>();      relevant.forEach(evaluation => {       peerQuestions.forEach(question => {         const value = evaluation.answers[question.id];         if (typeof value === 'number') {           totals.set(question.id, (totals.get(question.id) || 0) + getPointValue(question, value));         }       });     });      const totalsByQuestion = peerQuestions.map(question => {       const total = totals.get(question.id);       return typeof total === 'number' ? total : null;     });     const numericTotals = totalsByQuestion.filter((value): value is number => typeof value === 'number');     const totalOverall = numericTotals.length > 0       ? numericTotals.reduce((sum, value) => sum + value, 0)       : null;     return {       hasData: relevant.length > 0 && numericTotals.length > 0,       evaluationsCount: relevant.length,       totals: totalsByQuestion,       totalOverall,     };   };
   const handleAIAnalysis = async () => {
     if (!selectedEmp) return;
     setIsAnalyzing(true);
@@ -383,13 +383,13 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
       <div className="flex items-center gap-2 bg-slate-100 rounded-full p-1 w-fit">
         <button
           onClick={() => setViewMode('employee')}
-          className={`px-4 py-2 rounded-full text-xs font-semibold transition-all ${viewMode === 'employee' ? 'bg-[#005187] text-white shadow-sm' : 'text-slate-600'}`}
+          className={`px-4 py-2 rounded-full text-xs font-semibold transition-all ${viewMode === 'employee' ? 'bg-[var(--color-primary)] text-white shadow-sm' : 'text-slate-600'}`}
         >
           Empleado
         </button>
         <button
           onClick={() => setViewMode('general')}
-          className={`px-4 py-2 rounded-full text-xs font-semibold transition-all ${viewMode === 'general' ? 'bg-[#005187] text-white shadow-sm' : 'text-slate-600'}`}
+          className={`px-4 py-2 rounded-full text-xs font-semibold transition-all ${viewMode === 'general' ? 'bg-[var(--color-primary)] text-white shadow-sm' : 'text-slate-600'}`}
         >
           General
         </button>
@@ -400,7 +400,7 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
           <div className="lg:col-span-1 bg-white rounded-xl shadow-sm border overflow-hidden">
             <div className="divide-y max-h-[600px] overflow-y-auto">
               {employees.map(emp => (
-                <button key={emp.id} onClick={() => setSelectedEmp(emp)} className={`w-full p-4 text-left transition-all ${selectedEmp?.id === emp.id ? 'bg-[#eef5fa] border-l-4 border-[#005187]' : ''}`}>
+                <button key={emp.id} onClick={() => setSelectedEmp(emp)} className={`w-full p-4 text-left transition-all ${selectedEmp?.id === emp.id ? 'bg-[var(--color-primary-tint)] border-l-4 border-[var(--color-primary)]' : ''}`}>
                   <p className="font-semibold">{emp.name}</p>
                   <p className="text-xs text-slate-500">{emp.role}</p>
                 </button>
@@ -422,11 +422,11 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
                       <div className="flex items-center gap-3">
                         <button
                           onClick={handleExportEmployeePeer}
-                          className="text-[#005187] flex items-center gap-2 text-xs font-bold"
+                          className="text-[var(--color-primary)] flex items-center gap-2 text-xs font-bold"
                         >
                           <Download size={14} /> Exportar CSV
                         </button>
-                        <button onClick={() => copyChartToClipboard(chartRef)} className="text-[#005187] flex items-center gap-2 text-xs font-bold">
+                        <button onClick={() => copyChartToClipboard(chartRef)} className="text-[var(--color-primary)] flex items-center gap-2 text-xs font-bold">
                           <Copy size={14} /> Copiar Imagen
                         </button>
                       </div>
@@ -438,7 +438,7 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
                           <XAxis dataKey="name" />
                           <YAxis domain={["auto", "auto"]} />
                           <Tooltip content={renderScoreTooltip()} />
-                          <Bar dataKey="total" fill="#005187" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="total" fill="var(--color-primary)" radius={[4, 4, 0, 0]} />
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
@@ -466,7 +466,7 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
                     <div className="flex items-center gap-3">
                       <span className="text-xs text-slate-500">{internalStats ? `${internalStats.totalEvaluations} evaluaciones` : 'Sin datos'}</span>
                       {internalStats && (
-                        <button onClick={() => copyChartToClipboard(internalChartRef)} className="text-[#005187] flex items-center gap-2 text-xs font-bold">
+                        <button onClick={() => copyChartToClipboard(internalChartRef)} className="text-[var(--color-primary)] flex items-center gap-2 text-xs font-bold">
                           <Copy size={14} /> Copiar Imagen
                         </button>
                       )}
@@ -480,7 +480,7 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
                           <XAxis dataKey="name" />
                           <YAxis domain={["auto", "auto"]} />
                           <Tooltip content={renderScoreTooltip()} />
-                          <Bar dataKey="total" fill="#0f6d6d" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="total" fill="var(--color-primary)" radius={[4, 4, 0, 0]} />
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
@@ -512,8 +512,8 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
                 {stats && (
                   <div className="bg-slate-900 rounded-xl p-6 text-white">
                     <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-xl font-bold flex items-center gap-2"><Sparkles size={24} className="text-[#7aa3c0]" /> Análisis IA</h3>
-                      <button onClick={handleAIAnalysis} disabled={isAnalyzing} className="bg-[#005187] px-4 py-2 rounded-lg text-sm font-bold disabled:opacity-50">
+                      <h3 className="text-xl font-bold flex items-center gap-2"><Sparkles size={24} className="text-[var(--color-primary)]" /> Análisis IA</h3>
+                      <button onClick={handleAIAnalysis} disabled={isAnalyzing} className="bg-[var(--color-primary)] px-4 py-2 rounded-lg text-sm font-bold disabled:opacity-50">
                         {isAnalyzing ? 'Analizando...' : 'Analizar'}
                       </button>
                     </div>
@@ -547,12 +547,12 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
                     <button
                       onClick={handleExportGeneralPeer}
                       disabled={!canExportPeer}
-                      className="text-[#005187] flex items-center gap-2 text-xs font-bold disabled:opacity-50"
+                      className="text-[var(--color-primary)] flex items-center gap-2 text-xs font-bold disabled:opacity-50"
                     >
                       <Download size={14} /> Exportar CSV
                     </button>
                     {overallPeerQuestionStats && (
-                      <button onClick={() => copyChartToClipboard(overallPeerChartRef)} className="text-[#005187] flex items-center gap-2 text-xs font-bold">
+                      <button onClick={() => copyChartToClipboard(overallPeerChartRef)} className="text-[var(--color-primary)] flex items-center gap-2 text-xs font-bold">
                         <Copy size={14} /> Copiar Imagen
                       </button>
                     )}
@@ -566,7 +566,7 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
                       <XAxis dataKey="name" />
                         <YAxis domain={["auto", "auto"]} />
                         <Tooltip content={renderScoreTooltip()} />
-                        <Bar dataKey="total" fill="#005187" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="total" fill="var(--color-primary)" radius={[4, 4, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -584,12 +584,12 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
                     <button
                       onClick={handleExportGeneralInternal}
                       disabled={!canExportInternal}
-                      className="text-[#005187] flex items-center gap-2 text-xs font-bold disabled:opacity-50"
+                      className="text-[var(--color-primary)] flex items-center gap-2 text-xs font-bold disabled:opacity-50"
                     >
                       <Download size={14} /> Exportar CSV
                     </button>
                     {overallInternalStats && (
-                      <button onClick={() => copyChartToClipboard(overallInternalChartRef)} className="text-[#005187] flex items-center gap-2 text-xs font-bold">
+                      <button onClick={() => copyChartToClipboard(overallInternalChartRef)} className="text-[var(--color-primary)] flex items-center gap-2 text-xs font-bold">
                         <Copy size={14} /> Copiar Imagen
                       </button>
                     )}
@@ -605,7 +605,7 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
                       <Tooltip content={renderScoreTooltip()} />
                       <Bar
                         dataKey="total"
-                        fill="#0f6d6d"
+                        fill="var(--color-primary)"
                         radius={[4, 4, 0, 0]}
                         onClick={(data) => {
                           const nextCategory = data?.payload?.name ?? data?.name;
@@ -635,6 +635,7 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
                     <tr className="bg-slate-100 text-slate-600">
                       <th className="text-left px-3 py-2 font-semibold">Empleado</th>
                       <th className="text-right px-3 py-2 font-semibold">TOTAL</th>
+                      <th className="text-right px-3 py-2 font-semibold">AVERAGE</th>
                       {peerQuestions.map(question => (
                         <th key={`peer-head-${question.id}`} className="text-right px-3 py-2 font-semibold">
                           {question.text}
@@ -648,6 +649,9 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
                         <td className="px-3 py-2 text-slate-700 whitespace-nowrap">{row.employee.name}</td>
                         <td className="px-3 py-2 text-right font-semibold text-slate-700">
                           {row.totalOverall === null ? '-' : row.totalOverall}
+                        </td>
+                        <td className="px-3 py-2 text-right font-semibold text-slate-700">
+                          {row.totalOverall === null || row.evaluationsCount === 0 ? '-' : Math.round(Math.min(100, Math.max(0, (row.totalOverall / (row.evaluationsCount * 6)) * 100)))}
                         </td>
                         {row.totals.map((value, index) => (
                           <td key={`peer-${row.employee.id}-${index}`} className="px-3 py-2 text-right text-slate-700">

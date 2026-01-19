@@ -35,6 +35,13 @@ const DEFAULT_SECTION_OPTIONS: QuestionSectionOption[] = [
   { value: 'peer', label: 'EvaluaciÛn de pares' },
   { value: 'internal', label: 'SatisfacciÛn interna' },
 ];
+const OPTIONAL_CATEGORIES = new Set(['alimentacion', 'enfermeria', 'seguros']);
+const normalizeCategoryName = (value: string) => value
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .trim()
+  .toLowerCase();
+const isOptionalCategory = (category: string) => OPTIONAL_CATEGORIES.has(normalizeCategoryName(category));
 
 const buildSectionOptions = (rows: SectionOrderRow[] | null | undefined): QuestionSectionOption[] => {
   if (!rows || rows.length === 0) {
@@ -84,6 +91,140 @@ const mapProfile = (profile: ProfileRow): Employee => ({
   isAdmin: Boolean(profile.is_admin),
 });
 
+type ThemePalette = {
+  primary: string;
+  primaryDark: string;
+  primaryDarker: string;
+  primarySoft: string;
+  primaryTint: string;
+  primaryBorder: string;
+  logo: {
+    one: string;
+    two: string;
+    three: string;
+    four: string;
+  };
+};
+
+const DEFAULT_PRIMARY = '#005187';
+const DEFAULT_LOGO_COLORS = {
+  one: '#A0A0A0',
+  two: '#E25139',
+  three: '#FCDA35',
+  four: '#3C7EDD',
+};
+
+const DEFAULT_THEME: ThemePalette = {
+  primary: DEFAULT_PRIMARY,
+  primaryDark: '#00406b',
+  primaryDarker: '#003a5e',
+  primarySoft: '#dbe9f3',
+  primaryTint: '#eef5fa',
+  primaryBorder: '#c7dceb',
+  logo: DEFAULT_LOGO_COLORS,
+};
+
+const clampChannel = (value: number) => Math.min(255, Math.max(0, value));
+
+const hexToRgb = (hex: string) => {
+  const cleaned = hex.replace('#', '');
+  if (cleaned.length !== 6) return null;
+  const r = Number.parseInt(cleaned.slice(0, 2), 16);
+  const g = Number.parseInt(cleaned.slice(2, 4), 16);
+  const b = Number.parseInt(cleaned.slice(4, 6), 16);
+  if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) return null;
+  return { r, g, b };
+};
+
+const channelToHex = (value: number) => clampChannel(Math.round(value)).toString(16).padStart(2, '0');
+
+const mixHex = (base: string, mix: string, mixRatio: number) => {
+  const baseRgb = hexToRgb(base);
+  const mixRgb = hexToRgb(mix);
+  if (!baseRgb || !mixRgb) return base;
+  const ratio = Math.min(1, Math.max(0, mixRatio));
+  const r = baseRgb.r * (1 - ratio) + mixRgb.r * ratio;
+  const g = baseRgb.g * (1 - ratio) + mixRgb.g * ratio;
+  const b = baseRgb.b * (1 - ratio) + mixRgb.b * ratio;
+  return `#${channelToHex(r)}${channelToHex(g)}${channelToHex(b)}`;
+};
+
+const invertHex = (color: string) => {
+  const rgb = hexToRgb(color);
+  if (!rgb) return color;
+  return `#${channelToHex(255 - rgb.r)}${channelToHex(255 - rgb.g)}${channelToHex(255 - rgb.b)}`;
+};
+
+const buildLogoPalette = (primary: string, useDefault: boolean) => {
+  if (useDefault) return DEFAULT_LOGO_COLORS;
+  const complement = invertHex(primary);
+  return {
+    one: mixHex(primary, '#ffffff', 0.65),
+    two: mixHex(complement, '#000000', 0.15),
+    three: mixHex(complement, '#ffffff', 0.25),
+    four: mixHex(primary, '#000000', 0.15),
+  };
+};
+
+const buildThemePalette = (primary: string, useDefaultLogo: boolean): ThemePalette => ({
+  primary,
+  primaryDark: mixHex(primary, '#000000', 0.18),
+  primaryDarker: mixHex(primary, '#000000', 0.32),
+  primarySoft: mixHex(primary, '#ffffff', 0.7),
+  primaryTint: mixHex(primary, '#ffffff', 0.85),
+  primaryBorder: mixHex(primary, '#ffffff', 0.55),
+  logo: buildLogoPalette(primary, useDefaultLogo),
+});
+
+const normalizeCampusName = (value?: string | null) => (value ?? '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/[^a-zA-Z0-9]+/g, '')
+  .toLowerCase();
+
+const getThemeForCampus = (campus?: string | null) => {
+  const normalized = normalizeCampusName(campus);
+  if (normalized === 'puembo') {
+    return buildThemePalette('#40CCA1', false);
+  }
+  if (normalized === 'santaclara') {
+    return buildThemePalette('#EA1BBE', false);
+  }
+  return DEFAULT_THEME;
+};
+const getLogoForCampus = (campus?: string | null) => {
+  const normalized = normalizeCampusName(campus);
+  if (normalized === 'puembo') {
+    return 'Logo-puembo.svg';
+  }
+  if (normalized === 'santaclara') {
+    return 'Logo-santaclara.svg';
+  }
+  return 'logo.svg';
+};
+
+
+const Logo: React.FC<{ className?: string; title?: string }> = ({ className, title }) => (
+  <svg
+    width="481"
+    height="67"
+    viewBox="0 0 481 67"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    className={className}
+    role={title ? 'img' : 'presentation'}
+    aria-label={title}
+    aria-hidden={title ? undefined : true}
+  >
+    {title ? <title>{title}</title> : null}
+    <path d="M32.3066 0.5C49.8705 0.500128 64.1131 14.8025 64.1133 32.4502C64.1133 50.098 49.8706 64.4012 32.3066 64.4014C14.7425 64.4014 0.5 50.0981 0.5 32.4502C0.500168 14.8025 14.7426 0.5 32.3066 0.5Z" fill="var(--logo-1)" stroke="var(--logo-1)" />
+    <path d="M171.307 1.5C188.871 1.50013 203.113 15.8025 203.113 33.4502C203.113 51.098 188.871 65.4012 171.307 65.4014C153.743 65.4014 139.5 51.0981 139.5 33.4502C139.5 15.8025 153.743 1.5 171.307 1.5Z" fill="var(--logo-2)" stroke="var(--logo-2)" />
+    <path d="M315.062 1.93945C332.626 1.93958 346.869 16.242 346.869 33.8896C346.869 51.5374 332.626 65.8407 315.062 65.8408C297.498 65.8408 283.256 51.5375 283.256 33.8896C283.256 16.2419 297.499 1.93945 315.062 1.93945Z" fill="var(--logo-3)" stroke="var(--logo-3)" />
+    <path d="M448.674 0.939453C466.238 0.939582 480.48 15.242 480.48 32.8896C480.48 50.5374 466.238 64.8407 448.674 64.8408C431.11 64.8408 416.867 50.5375 416.867 32.8896C416.867 15.2419 431.11 0.939453 448.674 0.939453Z" fill="var(--logo-4)" stroke="var(--logo-4)" />
+  </svg>
+);
+
+
 const App: React.FC = () => {
   const { showAlert } = useModal();
   const [session, setSession] = useState<Session | null>(null);
@@ -112,6 +253,21 @@ const App: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
+  const theme = getThemeForCampus(currentUser?.campus);
+  const themeStyle = {
+    '--color-primary': theme.primary,
+    '--color-primary-dark': theme.primaryDark,
+    '--color-primary-darker': theme.primaryDarker,
+    '--color-primary-soft': theme.primarySoft,
+    '--color-primary-tint': theme.primaryTint,
+    '--color-primary-border': theme.primaryBorder,
+    '--logo-1': theme.logo.one,
+    '--logo-2': theme.logo.two,
+    '--logo-3': theme.logo.three,
+    '--logo-4': theme.logo.four,
+  } as React.CSSProperties;
+
+  const logoSrc = getLogoForCampus(currentUser?.campus);
 
   useEffect(() => {
     let isMounted = true;
@@ -192,7 +348,7 @@ const App: React.FC = () => {
 
       const categoriesPrimary = await supabase
         .from('question_categories')
-        .select('name, section, sort_order')
+        .select('name, section, sort_order, description')
         .order('sort_order', { ascending: true })
         .order('name');
       let categoriesData = categoriesPrimary.data;
@@ -205,7 +361,7 @@ const App: React.FC = () => {
 
       const questionsPrimary = await supabase
         .from('questions')
-        .select('id, text, category, section, question_type, options, sort_order')
+        .select('id, text, category, section, question_type, options, sort_order, is_required')
         .order('sort_order', { ascending: true })
         .order('id', { ascending: true });
       let questionsData = questionsPrimary.data;
@@ -235,12 +391,14 @@ const App: React.FC = () => {
         section: row.section ?? 'peer',
         type: (row.question_type ?? 'scale') as QuestionType,
         options: Array.isArray(row.options) ? row.options : undefined,
+        isRequired: isOptionalCategory(row.category) ? false : (row.is_required ?? true),
         sortOrder: row.sort_order ?? undefined,
       })) as Question[];
       const categoriesList = (categoriesData || []).map(row => ({
         name: row.name,
         section: row.section ?? 'peer',
         sortOrder: row.sort_order ?? 0,
+        description: row.description ?? '',
       })) as QuestionCategory[];
 
       const derivedCategoriesMap = new Map<string, QuestionCategory>();
@@ -253,6 +411,7 @@ const App: React.FC = () => {
             name: question.category,
             section: question.section,
             sortOrder: orderValue,
+            description: '',
           });
         }
       });
@@ -567,12 +726,13 @@ const App: React.FC = () => {
     setEvaluatorQuestions(prev => ({ ...prev, [evaluatorId]: questionIds }));
   };
 
-  const handleAddQuestion = async (text: string, category: string, section: QuestionSection, type: QuestionType, options: string[]) => {
+  const handleAddQuestion = async (text: string, category: string, section: QuestionSection, type: QuestionType, options: string[], isRequired: boolean) => {
     const sectionQuestions = questions.filter(question => question.section === section);
     const maxSortOrder = sectionQuestions.reduce((max, question, index) => (
       Math.max(max, question.sortOrder ?? index)
     ), -1);
     const nextSortOrder = maxSortOrder + 1;
+    const requiredValue = isOptionalCategory(category) ? false : isRequired;
     const { data, error } = await supabase
       .from('questions')
       .insert({
@@ -581,9 +741,10 @@ const App: React.FC = () => {
         section,
         question_type: type,
         options: type === 'scale' ? options : null,
+        is_required: requiredValue,
         sort_order: nextSortOrder,
       })
-      .select('id, text, category, section, question_type, options, sort_order')
+      .select('id, text, category, section, question_type, options, sort_order, is_required')
       .single();
     if (error || !data) {
       showAlert('No se pudo crear la pregunta.');
@@ -597,14 +758,15 @@ const App: React.FC = () => {
       section: data.section ?? section,
       type: (data.question_type ?? type) as QuestionType,
       options: Array.isArray(data.options) ? data.options : (type === 'scale' ? options : undefined),
+      isRequired: data.is_required ?? requiredValue,
       sortOrder: data.sort_order ?? nextSortOrder,
     } as Question;
     setQuestions(prev => sortQuestionsBySection([...prev, newQuestion], questionSections));
     if (!categories.some(cat => cat.name === category)) {
-      setCategories(prev => [...prev, { name: category, section }]);
+      setCategories(prev => [...prev, { name: category, section, description: '' }]);
     }
   };
-  const handleUpdateQuestion = async (id: number, text: string, category: string, section: QuestionSection, type: QuestionType, options: string[]) => {
+  const handleUpdateQuestion = async (id: number, text: string, category: string, section: QuestionSection, type: QuestionType, options: string[], isRequired: boolean) => {
     const existing = questions.find(question => question.id === id);
     const sectionQuestions = questions.filter(question => question.section === section);
     const currentIndex = sectionQuestions.findIndex(question => question.id === id);
@@ -613,6 +775,7 @@ const App: React.FC = () => {
       .filter(question => question.id !== id)
       .reduce((max, question, index) => Math.max(max, question.sortOrder ?? index), -1);
     const nextSortOrder = existing?.section === section ? baseSortOrder : maxSortOrder + 1;
+    const requiredValue = isOptionalCategory(category) ? false : isRequired;
     const { error } = await supabase
       .from('questions')
       .update({
@@ -637,6 +800,7 @@ const App: React.FC = () => {
           section,
           type,
           options: type === 'scale' ? options : undefined,
+          isRequired: requiredValue,
           sortOrder: nextSortOrder,
         }
         : question
@@ -693,30 +857,33 @@ const App: React.FC = () => {
     });
   };
 
-  const handleAddCategory = async (name: string, section: QuestionSection) => {
+  const handleAddCategory = async (name: string, section: QuestionSection, description?: string) => {
     const sectionCategories = categories.filter(cat => cat.section === section);
     const maxSortOrder = sectionCategories.reduce((max, cat, index) => (
       Math.max(max, cat.sortOrder ?? index)
     ), -1);
     const nextSortOrder = maxSortOrder + 1;
+    const trimmedDescription = description?.trim();
     const { error } = await supabase.from('question_categories').insert({
       name,
       section,
+      description: trimmedDescription || null,
       sort_order: nextSortOrder,
     });
     if (error) {
       showAlert('No se pudo crear la categoria.');
       return;
     }
-    setCategories(prev => [...prev, { name, section, sortOrder: nextSortOrder }]);
+    setCategories(prev => [...prev, { name, section, sortOrder: nextSortOrder, description: trimmedDescription || '' }]);
   };
-  const handleUpdateCategory = async (prevName: string, nextName: string) => {
-    const { error } = await supabase.from('question_categories').update({ name: nextName }).eq('name', prevName);
+  const handleUpdateCategory = async (prevName: string, nextName: string, description?: string) => {
+    const trimmedDescription = description?.trim();
+    const { error } = await supabase.from('question_categories').update({ name: nextName, description: trimmedDescription || null }).eq('name', prevName);
     if (error) {
       showAlert('No se pudo actualizar la categoria.');
       return;
     }
-    setCategories(prev => prev.map(cat => (cat.name === prevName ? { ...cat, name: nextName } : cat)));
+    setCategories(prev => prev.map(cat => (cat.name === prevName ? { ...cat, name: nextName, description: trimmedDescription || '' } : cat)));
     setQuestions(prev => prev.map(q => (q.category === prevName ? { ...q, category: nextName } : q)));
   };
 
@@ -849,16 +1016,25 @@ const App: React.FC = () => {
   const questionIdsForCurrentUser = currentUser
     ? evaluatorQuestions[currentUser.id] || questions.map(question => question.id)
     : [];
-  const questionsForCurrentUser = questions.filter(question => questionIdsForCurrentUser.includes(question.id));
+    const questionsForCurrentUser = questions.filter(question => questionIdsForCurrentUser.includes(question.id));
   const peerQuestionsForCurrentUser = questionsForCurrentUser.filter(question => question.section === 'peer');
   const internalQuestionsForCurrentUser = questionsForCurrentUser.filter(question => question.section === 'internal');
+  const requiredInternalQuestions = internalQuestionsForCurrentUser.filter(question => question.isRequired);
+  const allOptionalInternalQuestions = internalQuestionsForCurrentUser.length > 0 && requiredInternalQuestions.length === 0;
+  const allOptionalPeerQuestions = peerQuestionsForCurrentUser.length > 0 && peerQuestionsForCurrentUser.every(question => !question.isRequired);
   const internalCategories = Array.from(
     new Set(internalQuestionsForCurrentUser.map(question => question.category))
   ).sort((a, b) => a.localeCompare(b));
+  const getCategoryDescription = (categoryName: string, section: QuestionSection) => {
+    const description = categories.find(cat => cat.section === section && cat.name === categoryName)?.description;
+    return description?.trim() || '';
+  };
+  const selectedInternalCategoryDescription = selectedInternalCategory
+    ? getCategoryDescription(selectedInternalCategory, 'internal')
+    : '';
   const internalQuestionsForSelectedCategory = selectedInternalCategory
     ? internalQuestionsForCurrentUser.filter(question => question.category === selectedInternalCategory)
     : [];
-  const internalQuestionIds = internalQuestionsForCurrentUser.map(question => question.id);
   const internalEvaluation = currentUser
     ? evaluations.find(e => e.evaluatorId === currentUser.id && e.evaluatedId === currentUser.id)
     : null;
@@ -870,18 +1046,23 @@ const App: React.FC = () => {
   };
   const internalEvaluationCompleted = Boolean(
     internalEvaluation
-    && internalQuestionIds.length > 0
-    && internalQuestionsForCurrentUser.every(question => hasAnswer(question, internalEvaluation.answers[question.id]))
+    && requiredInternalQuestions.length > 0
+    && requiredInternalQuestions.every(question => hasAnswer(question, internalEvaluation.answers[question.id]))
   );
   const getInternalCategoryStats = (category: string) => {
     const categoryQuestions = internalQuestionsForCurrentUser.filter(question => question.category === category);
+    const requiredCategoryQuestions = categoryQuestions.filter(question => question.isRequired);
     const answered = internalEvaluation
       ? categoryQuestions.filter(question => hasAnswer(question, internalEvaluation.answers[question.id])).length
+      : 0;
+    const requiredAnswered = internalEvaluation
+      ? requiredCategoryQuestions.filter(question => hasAnswer(question, internalEvaluation.answers[question.id])).length
       : 0;
     return {
       total: categoryQuestions.length,
       answered,
-      completed: categoryQuestions.length > 0 && answered === categoryQuestions.length,
+      completed: requiredCategoryQuestions.length > 0 && requiredAnswered === requiredCategoryQuestions.length,
+      allOptional: categoryQuestions.length > 0 && requiredCategoryQuestions.length === 0,
     };
   };
 
@@ -901,7 +1082,7 @@ const App: React.FC = () => {
 
   if (isLoadingSession) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500">
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500" style={themeStyle}>
         Cargando...
       </div>
     );
@@ -909,11 +1090,11 @@ const App: React.FC = () => {
 
   if (!session) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-[#005187] to-[#003a5e]">
+      <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary-darker)]" style={themeStyle}>
         <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
           <div className="text-center mb-8">
             <img
-              src={`${import.meta.env.BASE_URL}logo.svg`}
+              src={`${import.meta.env.BASE_URL}${logoSrc}`}
               alt="Encuestas Reinvented"
               className="mx-auto w-40 h-auto max-w-full object-contain mb-4"
             />
@@ -929,14 +1110,14 @@ const App: React.FC = () => {
             <button
               type="button"
               onClick={() => { setLoginMode('link'); setAuthError(null); setLinkSent(false); }}
-              className={`py-2 rounded-lg text-sm font-semibold ${loginMode === 'link' ? 'bg-[#005187] text-white' : 'bg-slate-100 text-slate-600'}`}
+              className={`py-2 rounded-lg text-sm font-semibold ${loginMode === 'link' ? 'bg-[var(--color-primary)] text-white' : 'bg-slate-100 text-slate-600'}`}
             >
               Enlace
             </button>
             <button
               type="button"
               onClick={() => { setLoginMode('password'); setAuthError(null); setLinkSent(false); }}
-              className={`py-2 rounded-lg text-sm font-semibold ${loginMode === 'password' ? 'bg-[#005187] text-white' : 'bg-slate-100 text-slate-600'}`}
+              className={`py-2 rounded-lg text-sm font-semibold ${loginMode === 'password' ? 'bg-[var(--color-primary)] text-white' : 'bg-slate-100 text-slate-600'}`}
             >
               Contrase√±a
             </button>
@@ -949,7 +1130,7 @@ const App: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setLinkSent(false)}
-                className="w-full border border-[#c7dceb] text-[#00406b] px-4 py-2 rounded-lg font-semibold"
+                className="w-full border border-[var(--color-primary-border)] text-[var(--color-primary-dark)] px-4 py-2 rounded-lg font-semibold"
               >
                 Enviar otro enlace
               </button>
@@ -963,13 +1144,13 @@ const App: React.FC = () => {
                   value={emailInput}
                   onChange={(event) => setEmailInput(event.target.value)}
                   placeholder="usuario@empresa.com"
-                  className="mt-2 w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-[#005187] outline-none"
+                  className="mt-2 w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-[var(--color-primary)] outline-none"
                 />
               </div>
               <button
                 type="submit"
                 disabled={isSendingLink}
-                className="w-full flex items-center justify-center gap-2 bg-[#005187] hover:bg-[#00406b] text-white px-4 py-3 rounded-lg font-semibold transition-all disabled:opacity-60"
+                className="w-full flex items-center justify-center gap-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-dark)] text-white px-4 py-3 rounded-lg font-semibold transition-all disabled:opacity-60"
               >
                 <Mail size={18} /> {isSendingLink ? 'Enviando...' : 'Enviar enlace'}
               </button>
@@ -983,7 +1164,7 @@ const App: React.FC = () => {
                   value={emailInput}
                   onChange={(event) => setEmailInput(event.target.value)}
                   placeholder="usuario@empresa.com"
-                  className="mt-2 w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-[#005187] outline-none"
+                  className="mt-2 w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-[var(--color-primary)] outline-none"
                 />
               </div>
               <div>
@@ -993,13 +1174,13 @@ const App: React.FC = () => {
                   value={passwordInput}
                   onChange={(event) => setPasswordInput(event.target.value)}
                   placeholder="123456"
-                  className="mt-2 w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-[#005187] outline-none"
+                  className="mt-2 w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-[var(--color-primary)] outline-none"
                 />
               </div>
               <button
                 type="submit"
                 disabled={isSigningIn}
-                className="w-full flex items-center justify-center gap-2 bg-[#005187] hover:bg-[#00406b] text-white px-4 py-3 rounded-lg font-semibold transition-all disabled:opacity-60"
+                className="w-full flex items-center justify-center gap-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-dark)] text-white px-4 py-3 rounded-lg font-semibold transition-all disabled:opacity-60"
               >
                 {isSigningIn ? 'Ingresando...' : 'Ingresar'}
               </button>
@@ -1012,7 +1193,7 @@ const App: React.FC = () => {
 
   if (isLoadingData || !currentUser) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500">
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500" style={themeStyle}>
         Cargando datos...
       </div>
     );
@@ -1020,7 +1201,7 @@ const App: React.FC = () => {
 
   if (mustChangePassword) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50">
+      <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50" style={themeStyle}>
         <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
           <div className="text-center mb-6">
             <h1 className="text-2xl font-bold text-slate-800">Actualiza tu contrasena</h1>
@@ -1038,7 +1219,7 @@ const App: React.FC = () => {
                 type="password"
                 value={newPassword}
                 onChange={(event) => setNewPassword(event.target.value)}
-                className="mt-2 w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-[#005187] outline-none"
+                className="mt-2 w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-[var(--color-primary)] outline-none"
               />
             </div>
             <div>
@@ -1047,13 +1228,13 @@ const App: React.FC = () => {
                 type="password"
                 value={confirmPassword}
                 onChange={(event) => setConfirmPassword(event.target.value)}
-                className="mt-2 w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-[#005187] outline-none"
+                className="mt-2 w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-[var(--color-primary)] outline-none"
               />
             </div>
             <button
               type="submit"
               disabled={isUpdatingPassword}
-              className="w-full bg-[#005187] hover:bg-[#00406b] text-white px-4 py-3 rounded-lg font-semibold disabled:opacity-60"
+              className="w-full bg-[var(--color-primary)] hover:bg-[var(--color-primary-dark)] text-white px-4 py-3 rounded-lg font-semibold disabled:opacity-60"
             >
               {isUpdatingPassword ? 'Actualizando...' : 'Actualizar contrasena'}
             </button>
@@ -1070,15 +1251,15 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="min-h-screen bg-slate-50 flex flex-col" style={themeStyle}>
       <header className="bg-white border-b sticky top-0 z-10 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className="bg-white p-2 rounded-lg">
+            <div className="bg-white p-1 rounded-lg">
               <img
-                src={`${import.meta.env.BASE_URL}logo.svg`}
+                src={`${import.meta.env.BASE_URL}${logoSrc}`}
                 alt="Encuestas Reinvented"
-                className="w-28 h-auto max-w-full object-contain"
+                className="h-7 w-auto max-w-[160px] object-contain"
               />
             </div>
             <div>
@@ -1096,7 +1277,7 @@ const App: React.FC = () => {
                   <button
                     key={tab.id}
                     onClick={() => setView(tab.id as 'survey' | 'results' | 'admin' | 'questions')}
-                    className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-semibold whitespace-nowrap transition-all ${isActive ? 'bg-[#005187] text-white shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}
+                    className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-semibold whitespace-nowrap transition-all ${isActive ? 'bg-[var(--color-primary)] text-white shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}
                   >
                     <Icon size={16} />
                     {tab.label}
@@ -1138,10 +1319,10 @@ const App: React.FC = () => {
                         setSelectedInternalCategory(null);
                         setSelectedTargetId(null);
                       }}
-                      className={`flex items-center justify-between w-full p-5 rounded-xl border-2 transition-all ${internalEvaluationCompleted ? 'bg-emerald-50 border-emerald-100' : 'bg-white border-slate-100 hover:border-[#c7dceb] hover:shadow-md'}`}
+                      className={`flex items-center justify-between w-full p-5 rounded-xl border-2 transition-all ${internalEvaluationCompleted ? 'bg-emerald-50 border-emerald-100' : 'bg-white border-slate-100 hover:border-[var(--color-primary-border)] hover:shadow-md'}`}
                     >
                       <div className="flex items-center gap-4 text-left">
-                        <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold ${internalEvaluationCompleted ? 'bg-emerald-200 text-emerald-700' : 'bg-[#dbe9f3] text-[#00406b]'}`}>
+                        <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold ${internalEvaluationCompleted ? 'bg-emerald-200 text-emerald-700' : 'bg-[var(--color-primary-soft)] text-[var(--color-primary-dark)]'}`}>
                           SI
                         </div>
                         <div>
@@ -1150,6 +1331,7 @@ const App: React.FC = () => {
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
+                        {allOptionalInternalQuestions && <span className="text-xs font-bold uppercase text-amber-700 bg-amber-100 px-2 py-1 rounded">Opcional</span>}
                         {internalEvaluationCompleted && <span className="text-xs font-bold uppercase text-emerald-600 bg-emerald-100 px-2 py-1 rounded">Completado</span>}
                         <ChevronRight className={internalEvaluationCompleted ? 'text-emerald-400' : 'text-slate-300'} />
                       </div>
@@ -1171,6 +1353,7 @@ const App: React.FC = () => {
                       <>
                         {targetsToEvaluate.map(target => {
                           const isCompleted = evaluations.some(e => e.evaluatorId === currentUser.id && e.evaluatedId === target.id);
+                          const showCompleted = !allOptionalPeerQuestions && isCompleted;
                           return (
                             <button
                               key={target.id}
@@ -1179,10 +1362,10 @@ const App: React.FC = () => {
                                 setSelectedInternalCategory(null);
                                 setSelectedTargetId(target.id);
                               }}
-                              className={`flex items-center justify-between p-5 rounded-xl border-2 transition-all ${isCompleted ? 'bg-emerald-50 border-emerald-100' : 'bg-white border-slate-100 hover:border-[#c7dceb] hover:shadow-md'}`}
+                              className={`flex items-center justify-between p-5 rounded-xl border-2 transition-all ${showCompleted ? 'bg-emerald-50 border-emerald-100' : 'bg-white border-slate-100 hover:border-[var(--color-primary-border)] hover:shadow-md'}`}
                             >
                               <div className="flex items-center gap-4 text-left">
-                                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold ${isCompleted ? 'bg-emerald-200 text-emerald-700' : 'bg-[#dbe9f3] text-[#00406b]'}`}>
+                                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold ${showCompleted ? 'bg-emerald-200 text-emerald-700' : 'bg-[var(--color-primary-soft)] text-[var(--color-primary-dark)]'}`}>
                                   {target.name.charAt(0)}
                                 </div>
                                 <div>
@@ -1191,8 +1374,9 @@ const App: React.FC = () => {
                                 </div>
                               </div>
                               <div className="flex items-center gap-3">
-                                {isCompleted && <span className="text-xs font-bold uppercase text-emerald-600 bg-emerald-100 px-2 py-1 rounded">Completado</span>}
-                                <ChevronRight className={isCompleted ? 'text-emerald-400' : 'text-slate-300'} />
+                                {allOptionalPeerQuestions && <span className="text-xs font-bold uppercase text-amber-700 bg-amber-100 px-2 py-1 rounded">Opcional</span>}
+                                {showCompleted && <span className="text-xs font-bold uppercase text-emerald-600 bg-emerald-100 px-2 py-1 rounded">Completado</span>}
+                                <ChevronRight className={showCompleted ? 'text-emerald-400' : 'text-slate-300'} />
                               </div>
                             </button>
                           );
@@ -1211,7 +1395,7 @@ const App: React.FC = () => {
               <div className="max-w-4xl mx-auto">
                 <button
                   onClick={handleSurveyBack}
-                  className="mb-6 text-sm font-medium text-slate-500 hover:text-[#005187] flex items-center gap-1"
+                  className="mb-6 text-sm font-medium text-slate-500 hover:text-[var(--color-primary)] flex items-center gap-1"
                 >
                   Volver
                 </button>
@@ -1230,14 +1414,16 @@ const App: React.FC = () => {
                         internalCategories.map(category => {
                           const stats = getInternalCategoryStats(category);
                           const badge = category.trim().charAt(0).toUpperCase() || 'I';
+                          const showOptional = stats.allOptional;
+                          const showCompleted = stats.completed && !showOptional;
                           return (
                             <button
                               key={category}
                               onClick={() => setSelectedInternalCategory(category)}
-                              className={`flex items-center justify-between p-5 rounded-xl border-2 transition-all ${stats.completed ? 'bg-emerald-50 border-emerald-100' : 'bg-white border-slate-100 hover:border-[#c7dceb] hover:shadow-md'}`}
+                              className={`flex items-center justify-between p-5 rounded-xl border-2 transition-all ${showCompleted ? 'bg-emerald-50 border-emerald-100' : 'bg-white border-slate-100 hover:border-[var(--color-primary-border)] hover:shadow-md'}`}
                             >
                               <div className="flex items-center gap-4 text-left">
-                                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold ${stats.completed ? 'bg-emerald-200 text-emerald-700' : 'bg-[#dbe9f3] text-[#00406b]'}`}>
+                                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold ${showCompleted ? 'bg-emerald-200 text-emerald-700' : 'bg-[var(--color-primary-soft)] text-[var(--color-primary-dark)]'}`}>
                                   {badge}
                                 </div>
                                 <div>
@@ -1246,8 +1432,9 @@ const App: React.FC = () => {
                                 </div>
                               </div>
                               <div className="flex items-center gap-3">
-                                {stats.completed && <span className="text-xs font-bold uppercase text-emerald-600 bg-emerald-100 px-2 py-1 rounded">Completado</span>}
-                                <ChevronRight className={stats.completed ? 'text-emerald-400' : 'text-slate-300'} />
+                                {showOptional && <span className="text-xs font-bold uppercase text-amber-700 bg-amber-100 px-2 py-1 rounded">Opcional</span>}
+                                {showCompleted && <span className="text-xs font-bold uppercase text-emerald-600 bg-emerald-100 px-2 py-1 rounded">Completado</span>}
+                                <ChevronRight className={showCompleted ? 'text-emerald-400' : 'text-slate-300'} />
                               </div>
                             </button>
                           );
@@ -1262,6 +1449,8 @@ const App: React.FC = () => {
                       ? { ...currentUser, name: 'Institucion', role: `Satisfaccion interna${selectedInternalCategory ? ` - ${selectedInternalCategory}` : ''}` }
                       : employees.find(e => e.id === selectedTargetId)!}
                     questions={selectedEvaluationSection === 'internal' ? internalQuestionsForSelectedCategory : peerQuestionsForCurrentUser}
+                    sectionTitle={selectedEvaluationSection === 'internal' ? selectedInternalCategory ?? undefined : undefined}
+                    sectionDescription={selectedEvaluationSection === 'internal' ? (selectedInternalCategoryDescription || undefined) : undefined}
                     onSave={handleSaveEvaluation}
                   />
                 )}
@@ -1277,7 +1466,7 @@ const App: React.FC = () => {
                 <h2 className="text-2xl font-bold text-slate-800">Panel de resultados</h2>
                 <p className="text-slate-500">Estadisticas y analisis de desempeno.</p>
               </div>
-              <button onClick={exportToCSV} className="flex items-center gap-2 bg-[#005187] hover:bg-[#00406b] text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-all" disabled={evaluations.length === 0}>
+              <button onClick={exportToCSV} className="flex items-center gap-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-dark)] text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-all" disabled={evaluations.length === 0}>
                 <Download size={18} /> Exportar CSV
               </button>
             </div>

@@ -26,12 +26,15 @@ create table if not exists public.allowed_emails (
 create table if not exists public.question_categories (
   name text primary key,
   section text not null default 'peer',
+  description text,
   sort_order integer not null default 0,
   created_at timestamptz not null default now()
 );
 
 alter table public.question_categories
   add column if not exists section text not null default 'peer';
+alter table public.question_categories
+  add column if not exists description text;
 alter table public.question_categories
   add column if not exists sort_order integer not null default 0;
 
@@ -51,6 +54,7 @@ create table if not exists public.questions (
   section text not null default 'peer',
   question_type text not null default 'scale',
   options jsonb,
+  is_required boolean not null default true,
   is_active boolean not null default true,
   sort_order integer not null default 0
 );
@@ -61,6 +65,8 @@ alter table public.questions
   add column if not exists question_type text not null default 'scale';
 alter table public.questions
   add column if not exists options jsonb;
+alter table public.questions
+  add column if not exists is_required boolean not null default true;
 alter table public.questions
   add column if not exists sort_order integer not null default 0;
 

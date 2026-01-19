@@ -19,6 +19,12 @@ const clientId = Deno.env.get("M365_CLIENT_ID") ?? "";
 const clientSecret = Deno.env.get("M365_CLIENT_SECRET") ?? "";
 const senderEmail = Deno.env.get("M365_SENDER_EMAIL") ?? "";
 const senderName = Deno.env.get("M365_SENDER_NAME") ?? "Encuestas Reinvented";
+const missingM365Config = [
+  ["M365_TENANT_ID", tenantId],
+  ["M365_CLIENT_ID", clientId],
+  ["M365_CLIENT_SECRET", clientSecret],
+  ["M365_SENDER_EMAIL", senderEmail],
+].filter(([, value]) => !value);
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -91,9 +97,10 @@ const getGraphToken = async () => {
   return data.access_token as string;
 };
 
-const sendEmail = async (to: string, subject: string, html: string) => {
-  if (!tenantId || !clientId || !clientSecret || !senderEmail) {
-    throw new Error("Missing Microsoft 365 email configuration.");
+  const sendEmail = async (to: string, subject: string, html: string) => {
+  if (missingM365Config.length > 0) {
+    const missing = missingM365Config.map(([key]) => key).join(", ");
+    throw new Error(`Missing Microsoft 365 email configuration: ${missing}`);
   }
 
   const token = await getGraphToken();

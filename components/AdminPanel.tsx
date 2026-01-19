@@ -306,7 +306,7 @@ const AdminPanel: React.FC<Props> = ({
     <div className="space-y-10">
         <section className="bg-white rounded-2xl shadow-sm border p-6">
         <div className="flex items-center gap-3 mb-6">
-          <Users className="text-[#005187]" />
+          <Users className="text-[var(--color-primary)]" />
           <div>
             <h2 className="text-xl font-bold text-slate-800">Crear usuario</h2>
             <p className="text-sm text-slate-500">Se crea con contrase�a por defecto: 123456.</p>
@@ -318,42 +318,42 @@ const AdminPanel: React.FC<Props> = ({
             placeholder="Correo"
             value={newEmail}
             onChange={(event) => setNewEmail(event.target.value)}
-            className="px-4 py-2 rounded-lg border focus:ring-2 focus:ring-[#005187] outline-none"
+            className="px-4 py-2 rounded-lg border focus:ring-2 focus:ring-[var(--color-primary)] outline-none"
           />
           <input
             type="text"
             placeholder="Nombre"
             value={newName}
             onChange={(event) => setNewName(event.target.value)}
-            className="px-4 py-2 rounded-lg border focus:ring-2 focus:ring-[#005187] outline-none"
+            className="px-4 py-2 rounded-lg border focus:ring-2 focus:ring-[var(--color-primary)] outline-none"
           />
           <input
             type="text"
             placeholder="Cargo"
             value={newRole}
             onChange={(event) => setNewRole(event.target.value)}
-            className="px-4 py-2 rounded-lg border focus:ring-2 focus:ring-[#005187] outline-none"
+            className="px-4 py-2 rounded-lg border focus:ring-2 focus:ring-[var(--color-primary)] outline-none"
           />
           <input
             type="text"
             placeholder="Grupo"
             value={newGroup}
             onChange={(event) => setNewGroup(event.target.value)}
-            className="px-4 py-2 rounded-lg border focus:ring-2 focus:ring-[#005187] outline-none"
+            className="px-4 py-2 rounded-lg border focus:ring-2 focus:ring-[var(--color-primary)] outline-none"
           />
           <input
             type="text"
             placeholder="Campus"
             value={newCampus}
             onChange={(event) => setNewCampus(event.target.value)}
-            className="px-4 py-2 rounded-lg border focus:ring-2 focus:ring-[#005187] outline-none"
+            className="px-4 py-2 rounded-lg border focus:ring-2 focus:ring-[var(--color-primary)] outline-none"
           />
           <label className="flex items-center gap-2 text-sm text-slate-600">
             <input
               type="checkbox"
               checked={newIsAdmin}
               onChange={(event) => setNewIsAdmin(event.target.checked)}
-              className="h-4 w-4 text-[#005187]"
+              className="h-4 w-4 text-[var(--color-primary)]"
             />
             Administrador
           </label>
@@ -368,14 +368,14 @@ const AdminPanel: React.FC<Props> = ({
             </div>
           )}
           {resetMessage && (
-            <div className="text-sm text-[#00406b] bg-[#eef5fa] border border-[#dbe9f3] p-3 rounded-lg lg:col-span-2">
+            <div className="text-sm text-[var(--color-primary-dark)] bg-[var(--color-primary-tint)] border border-[var(--color-primary-soft)] p-3 rounded-lg lg:col-span-2">
               {resetMessage}
             </div>
           )}
           <button
             onClick={handleCreateUser}
             disabled={isCreating}
-            className="lg:col-span-2 bg-[#005187] text-white font-bold py-2 rounded-lg disabled:opacity-60"
+            className="lg:col-span-2 bg-[var(--color-primary)] text-white font-bold py-2 rounded-lg disabled:opacity-60"
           >
             {isCreating ? 'Creando...' : 'Crear usuario'}
           </button>
@@ -383,7 +383,7 @@ const AdminPanel: React.FC<Props> = ({
       </section>
         <section className="bg-white rounded-2xl shadow-sm border p-6">
         <div className="flex items-center gap-3 mb-4">
-          <Database className="text-[#005187]" />
+          <Database className="text-[var(--color-primary)]" />
           <div>
             <h2 className="text-xl font-bold text-slate-800">Usuarios y permisos</h2>
             <p className="text-sm text-slate-500">
@@ -396,7 +396,7 @@ const AdminPanel: React.FC<Props> = ({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <section className="bg-white rounded-2xl shadow-sm border p-6">
           <div className="flex items-center gap-3 mb-6">
-            <Users className="text-[#005187]" />
+            <Users className="text-[var(--color-primary)]" />
             <h2 className="text-xl font-bold text-slate-800">Gestionar plantilla</h2>
           </div>
 
@@ -456,7 +456,7 @@ const AdminPanel: React.FC<Props> = ({
               <div
                 key={emp.id}
                 onClick={() => selectEvaluator(emp)}
-                className={`py-3 px-2 -mx-2 rounded-lg flex items-center justify-between group cursor-pointer transition-all ${selectedEvaluator === emp.id ? 'bg-[#eef5fa] border-l-4 border-[#005187]' : 'hover:bg-slate-50'}`}
+                className={`py-3 px-2 -mx-2 rounded-lg flex items-center justify-between group cursor-pointer transition-all ${selectedEvaluator === emp.id ? 'bg-[var(--color-primary-tint)] border-l-4 border-[var(--color-primary)]' : 'hover:bg-slate-50'}`}
               >
                 {editingId === emp.id ? (
                   <div className="flex-grow grid grid-cols-1 sm:grid-cols-2 gap-2 mr-2">
@@ -485,12 +485,12 @@ const AdminPanel: React.FC<Props> = ({
                     </>
                   ) : (
                     <>
-                      <button onClick={(event) => { event.stopPropagation(); startEditing(emp); }} className="opacity-0 group-hover:opacity-100 p-2 text-slate-400 hover:text-[#005187]">
+                      <button onClick={(event) => { event.stopPropagation(); startEditing(emp); }} className="opacity-0 group-hover:opacity-100 p-2 text-slate-400 hover:text-[var(--color-primary)]">
                         <Edit2 size={16}/>
                       </button>
                       <button
                         onClick={(event) => { event.stopPropagation(); handleResetPassword(emp.id, emp.email); }}
-                        className="opacity-0 group-hover:opacity-100 p-2 text-slate-400 hover:text-[#005187]"
+                        className="opacity-0 group-hover:opacity-100 p-2 text-slate-400 hover:text-[var(--color-primary)]"
                         title="Restablecer contrase�a"
                       >
                         <KeyRound size={16}/>
@@ -505,7 +505,7 @@ const AdminPanel: React.FC<Props> = ({
 
         <section className="bg-white rounded-2xl shadow-sm border p-6">
           <div className="flex items-center gap-3 mb-6">
-            <ListChecks className="text-[#005187]" />
+            <ListChecks className="text-[var(--color-primary)]" />
             <h2 className="text-xl font-bold text-slate-800">Asignaciones</h2>
           </div>
           {!selectedEvaluator ? (
@@ -519,7 +519,7 @@ const AdminPanel: React.FC<Props> = ({
               <button
                 type="button"
                 onClick={() => setShowAssignmentPicker(true)}
-                className="mt-4 inline-flex items-center justify-center gap-2 bg-[#005187] text-white font-bold py-2 px-4 rounded-lg"
+                className="mt-4 inline-flex items-center justify-center gap-2 bg-[var(--color-primary)] text-white font-bold py-2 px-4 rounded-lg"
               >
                 <PlusCircle size={16} /> Agregar
               </button>
@@ -548,7 +548,7 @@ const AdminPanel: React.FC<Props> = ({
                 <button
                   type="button"
                   onClick={() => setShowAssignmentPicker(true)}
-                  className="inline-flex items-center justify-center gap-2 bg-[#005187] text-white font-bold py-2 px-4 rounded-lg"
+                  className="inline-flex items-center justify-center gap-2 bg-[var(--color-primary)] text-white font-bold py-2 px-4 rounded-lg"
                 >
                   <PlusCircle size={16} /> Agregar
                 </button>
@@ -592,7 +592,7 @@ const AdminPanel: React.FC<Props> = ({
       <section className="bg-white rounded-2xl shadow-sm border p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
           <div className="flex items-center gap-3">
-            <HelpCircle className="text-[#005187]" />
+            <HelpCircle className="text-[var(--color-primary)]" />
             <div>
               <h2 className="text-xl font-bold text-slate-800">Preguntas que aparecer�n</h2>
               <p className="text-sm text-slate-500">
@@ -616,7 +616,7 @@ const AdminPanel: React.FC<Props> = ({
                   onDrop={handleSectionDrop(section.value)}
                   onDragEnd={handleSectionDragEnd}
                   onClick={() => setSelectedQuestionSection(section.value)}
-                  className={`px-3 py-2 rounded-full text-xs font-semibold ${selectedQuestionSection === section.value ? 'bg-[#005187] text-white shadow-sm' : 'bg-slate-100 text-slate-600'} ${isDragOver ? 'ring-2 ring-[#005187] ring-offset-2' : ''} ${isDragging ? 'opacity-60' : ''} cursor-grab`}
+                  className={`px-3 py-2 rounded-full text-xs font-semibold ${selectedQuestionSection === section.value ? 'bg-[var(--color-primary)] text-white shadow-sm' : 'bg-slate-100 text-slate-600'} ${isDragOver ? 'ring-2 ring-[var(--color-primary)] ring-offset-2' : ''} ${isDragging ? 'opacity-60' : ''} cursor-grab`}
                 >
                   {section.label}
                 </button>
@@ -625,7 +625,7 @@ const AdminPanel: React.FC<Props> = ({
             <button
               onClick={() => selectedEvaluator && selectAllQuestions(selectedEvaluator)}
               disabled={!selectedEvaluator || questionsForSection.length === 0}
-              className="text-xs font-semibold text-[#005187] hover:text-[#003a5e] disabled:text-slate-300"
+              className="text-xs font-semibold text-[var(--color-primary)] hover:text-[var(--color-primary-darker)] disabled:text-slate-300"
             >
               Seleccionar todo
             </button>
@@ -654,13 +654,13 @@ const AdminPanel: React.FC<Props> = ({
                   onDragOver={handleQuestionDragOver(question.id)}
                   onDrop={handleQuestionDrop(question.id)}
                   onDragEnd={handleQuestionDragEnd}
-                  className={`flex items-start gap-3 p-3 rounded-xl border-2 transition-all cursor-pointer ${isActive ? 'border-[#005187] bg-[#eef5fa]' : 'border-slate-100 bg-slate-50'} ${isDragOver ? 'ring-2 ring-[#005187] ring-offset-2' : ''} ${isDragging ? 'opacity-60' : ''} cursor-grab`}
+                  className={`flex items-start gap-3 p-3 rounded-xl border-2 transition-all cursor-pointer ${isActive ? 'border-[var(--color-primary)] bg-[var(--color-primary-tint)]' : 'border-slate-100 bg-slate-50'} ${isDragOver ? 'ring-2 ring-[var(--color-primary)] ring-offset-2' : ''} ${isDragging ? 'opacity-60' : ''} cursor-grab`}
                 >
                   <input
                     type="checkbox"
                     checked={isActive}
                     onChange={() => toggleQuestionForEvaluator(selectedEvaluator, question.id)}
-                    className="mt-1 h-4 w-4 text-[#005187]"
+                    className="mt-1 h-4 w-4 text-[var(--color-primary)]"
                   />
                   <div className="flex-1">
                     <p className="text-sm font-medium text-slate-800">{question.text}</p>

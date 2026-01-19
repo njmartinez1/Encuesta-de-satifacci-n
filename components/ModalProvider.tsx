@@ -24,7 +24,7 @@ type ModalContextValue = {
 const ModalContext = createContext<ModalContextValue | null>(null);
 
 const VARIANT_STYLES: Record<ModalVariant, { bar: string; button: string }> = {
-  info: { bar: 'bg-[#005187]', button: 'bg-[#005187] hover:bg-[#00406b]' },
+  info: { bar: 'bg-[var(--color-primary)]', button: 'bg-[var(--color-primary)] hover:bg-[var(--color-primary-dark)]' },
   warning: { bar: 'bg-amber-500', button: 'bg-amber-600 hover:bg-amber-700' },
   success: { bar: 'bg-emerald-500', button: 'bg-emerald-600 hover:bg-emerald-700' },
   danger: { bar: 'bg-red-500', button: 'bg-red-600 hover:bg-red-700' },
