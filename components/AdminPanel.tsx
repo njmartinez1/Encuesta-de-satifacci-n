@@ -1,5 +1,5 @@
 ﻿import React, { useState } from 'react';
-import { Employee, Assignment, Question, QuestionSection, QuestionSectionOption } from '../types.ts';
+import { AccessRole, Employee, Assignment, Question, QuestionSection, QuestionSectionOption } from '../types.ts';
 import { Users, ListChecks, CheckCircle2, Edit2, X, Check, Database, HelpCircle, KeyRound, PlusCircle } from 'lucide-react';
 import { useModal } from './ModalProvider.tsx';
 
@@ -14,7 +14,7 @@ interface Props {
   onUpdateEvaluatorQuestions: (evaluatorId: string, questionIds: number[]) => Promise<void>;
   onUpdateQuestionOrder: (section: QuestionSection, questionIds: number[]) => Promise<void>;
   onUpdateQuestionSections: (sections: QuestionSectionOption[]) => Promise<void>;
-  onCreateUser: (payload: { email: string; name: string; role: string; group: string; campus: string; isAdmin: boolean }) => Promise<Employee>;
+  onCreateUser: (payload: { email: string; name: string; role: string; group: string; campus: string; isAdmin: boolean; accessRole: AccessRole }) => Promise<Employee>;
   onResetPassword: (id: string) => Promise<void>;
 }
 
@@ -49,6 +49,7 @@ const AdminPanel: React.FC<Props> = ({
   const [newRole, setNewRole] = useState('');
   const [newGroup, setNewGroup] = useState('');
   const [newCampus, setNewCampus] = useState('');
+  const [newAccessRole, setNewAccessRole] = useState<AccessRole>('educator');
   const [newIsAdmin, setNewIsAdmin] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -106,6 +107,7 @@ const AdminPanel: React.FC<Props> = ({
         group: newGroup.trim(),
         campus: newCampus.trim(),
         isAdmin: newIsAdmin,
+        accessRole: newAccessRole,
       });
       setCreateSuccess(`Usuario creado: ${created.email}`);
       setNewEmail('');
@@ -113,6 +115,7 @@ const AdminPanel: React.FC<Props> = ({
       setNewRole('');
       setNewGroup('');
       setNewCampus('');
+      setNewAccessRole('educator');
       setNewIsAdmin(false);
     } catch (error) {
       setCreateError(error instanceof Error ? error.message : 'No se pudo crear el usuario.');
@@ -125,17 +128,17 @@ const AdminPanel: React.FC<Props> = ({
     setCreateError(null);
     setCreateSuccess(null);
     setResetMessage(null);
-    const confirmed = await showConfirm(`Se restablecer� la contrase�a de ${email} a 123456. �Continuar?`, {
-      title: 'Restablecer contrase�a',
+    const confirmed = await showConfirm(`Se restablecerá la contraseña de ${email} a 123456. ¿Continuar?`, {
+      title: 'Restablecer contraseña',
       confirmLabel: 'Continuar',
       variant: 'warning',
     });
     if (!confirmed) return;
     try {
       await onResetPassword(id);
-      setResetMessage(`Contrase�a restablecida: ${email}`);
+      setResetMessage(`Contraseña restablecida: ${email}`);
     } catch (error) {
-      setResetMessage('No se pudo restablecer la contrase�a.');
+      setResetMessage('No se pudo restablecer la contraseña.');
     }
   };
 
@@ -309,7 +312,7 @@ const AdminPanel: React.FC<Props> = ({
           <Users className="text-[var(--color-primary)]" />
           <div>
             <h2 className="text-xl font-bold text-slate-800">Crear usuario</h2>
-            <p className="text-sm text-slate-500">Se crea con contrase�a por defecto: 123456.</p>
+            <p className="text-sm text-slate-500">Se crea con contraseña por defecto: 123456.</p>
           </div>
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl">
@@ -348,11 +351,23 @@ const AdminPanel: React.FC<Props> = ({
             onChange={(event) => setNewCampus(event.target.value)}
             className="px-4 py-2 rounded-lg border focus:ring-2 focus:ring-[var(--color-primary)] outline-none"
           />
+          <label className="text-sm text-slate-600">
+            Acceso
+            <select
+              value={newAccessRole}
+              onChange={(event) => setNewAccessRole(event.target.value as AccessRole)}
+              disabled={newIsAdmin}
+              className="mt-2 w-full px-3 py-2 text-sm border rounded-lg bg-white disabled:opacity-60"
+            >
+              <option value="educator">Educador</option>
+              <option value="viewer">Visualizador</option>
+            </select>
+          </label>
           <label className="flex items-center gap-2 text-sm text-slate-600">
             <input
               type="checkbox"
               checked={newIsAdmin}
-              onChange={(event) => setNewIsAdmin(event.target.checked)}
+              onChange={(event) => { const checked = event.target.checked; setNewIsAdmin(checked); if (checked) setNewAccessRole('educator'); }}
               className="h-4 w-4 text-[var(--color-primary)]"
             />
             Administrador
@@ -471,7 +486,7 @@ const AdminPanel: React.FC<Props> = ({
                     <p className="text-xs text-slate-500">{emp.role}</p>
                     {(emp.group || emp.campus) && (
                       <p className="text-xs text-slate-400">
-                        {[emp.group, emp.campus].filter(Boolean).join(' � ')}
+                        {[emp.group, emp.campus].filter(Boolean).join(' · ')}
                       </p>
                     )}
                     <p className="text-xs text-slate-400">{emp.email}</p>
@@ -491,7 +506,7 @@ const AdminPanel: React.FC<Props> = ({
                       <button
                         onClick={(event) => { event.stopPropagation(); handleResetPassword(emp.id, emp.email); }}
                         className="opacity-0 group-hover:opacity-100 p-2 text-slate-400 hover:text-[var(--color-primary)]"
-                        title="Restablecer contrase�a"
+                        title="Restablecer contraseña"
                       >
                         <KeyRound size={16}/>
                       </button>
@@ -594,7 +609,7 @@ const AdminPanel: React.FC<Props> = ({
           <div className="flex items-center gap-3">
             <HelpCircle className="text-[var(--color-primary)]" />
             <div>
-              <h2 className="text-xl font-bold text-slate-800">Preguntas que aparecer�n</h2>
+              <h2 className="text-xl font-bold text-slate-800">Preguntas que aparecerán</h2>
               <p className="text-sm text-slate-500">
                 {selectedEvaluator
                   ? `${selectedCount}/${questionsForSection.length} seleccionadas en ${selectedSectionLabel.toLowerCase()}`

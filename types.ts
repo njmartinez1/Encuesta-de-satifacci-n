@@ -1,3 +1,5 @@
+export type AccessRole = 'educator' | 'viewer' | 'admin';
+
 export interface Employee {
   id: string;
   name: string;
@@ -6,6 +8,7 @@ export interface Employee {
   campus: string;
   email: string;
   isAdmin: boolean;
+  accessRole?: AccessRole;
 }
 
 export type QuestionSection = 'peer' | 'internal';
@@ -37,6 +40,8 @@ export interface QuestionSectionOption {
 export interface Evaluation {
   evaluatorId: string;
   evaluatedId: string;
+  periodId?: string | null;
+  isAnonymous?: boolean | null;
   answers: { [questionId: number]: number | string };
   comments: string;
   timestamp: string;
@@ -45,6 +50,15 @@ export interface Evaluation {
 export interface Assignment {
   evaluatorId: string;
   targets: string[]; // List of employee IDs to evaluate
+}
+
+export interface EvaluationPeriod {
+  id: string;
+  name: string;
+  academicYear: string;
+  periodNumber: number;
+  startsAt: string;
+  endsAt: string;
 }
 
 

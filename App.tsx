@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import { Employee, Evaluation, Assignment, Question, QuestionCategory, QuestionSection, QuestionSectionOption, QuestionType } from './types.ts';
+import { AccessRole, Employee, Evaluation, EvaluationPeriod, Assignment, Question, QuestionCategory, QuestionSection, QuestionSectionOption, QuestionType } from './types.ts';
 import EvaluationForm from './components/EvaluationForm.tsx';
 import ResultsDashboard from './components/ResultsDashboard.tsx';
 import AdminPanel from './components/AdminPanel.tsx';
@@ -14,6 +14,7 @@ type ProfileRow = {
   email: string | null;
   name: string | null;
   role: string | null;
+  access_role: string | null;
   group_name: string | null;
   campus: string | null;
   is_admin: boolean | null;
@@ -24,16 +25,27 @@ type EvaluatorQuestionRow = { evaluator_id: string; question_id: number };
 type EvaluationRow = {
   evaluator_id: string;
   evaluated_id: string;
+  period_id: string | null;
   answers: Record<string, number | string>;
   comments: string | null;
+  is_anonymous: boolean | null;
   created_at: string | null;
+};
+
+type PeriodRow = {
+  id: string;
+  name: string;
+  academic_year: string;
+  period_number: number;
+  starts_at: string;
+  ends_at: string;
 };
 
 type SectionOrderRow = { section: string | null; sort_order: number | null };
 
 const DEFAULT_SECTION_OPTIONS: QuestionSectionOption[] = [
-  { value: 'peer', label: 'Evaluaci�n de pares' },
-  { value: 'internal', label: 'Satisfacci�n interna' },
+  { value: 'peer', label: 'Evaluación de pares' },
+  { value: 'internal', label: 'Satisfacción interna' },
 ];
 const OPTIONAL_CATEGORIES = new Set(['alimentacion', 'enfermeria', 'seguros']);
 const normalizeCategoryName = (value: string) => value
@@ -81,6 +93,13 @@ const sortQuestionsBySection = (items: Question[], sections: QuestionSectionOpti
     return a.id - b.id;
   });
 };
+const normalizeAccessRole = (value?: string | null): AccessRole => {
+  const normalized = (value ?? '').trim().toLowerCase();
+  if (normalized === 'viewer') return 'viewer';
+  if (normalized === 'educator') return 'educator';
+  return 'educator';
+};
+
 const mapProfile = (profile: ProfileRow): Employee => ({
   id: profile.id,
   email: profile.email ?? '',
@@ -89,6 +108,7 @@ const mapProfile = (profile: ProfileRow): Employee => ({
   group: profile.group_name || '',
   campus: profile.campus || '',
   isAdmin: Boolean(profile.is_admin),
+  accessRole: profile.is_admin ? 'admin' : normalizeAccessRole(profile.access_role),
 });
 
 type ThemePalette = {
@@ -240,7 +260,6 @@ const getLogoForCampus = (campus?: string | null) => {
   return 'logo.svg';
 };
 
-
 const Logo: React.FC<{ className?: string; title?: string }> = ({ className, title }) => (
   <svg
     width="481"
@@ -261,7 +280,6 @@ const Logo: React.FC<{ className?: string; title?: string }> = ({ className, tit
   </svg>
 );
 
-
 const App: React.FC = () => {
   const { showAlert } = useModal();
   const [session, setSession] = useState<Session | null>(null);
@@ -269,6 +287,9 @@ const App: React.FC = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
+  const [periods, setPeriods] = useState<EvaluationPeriod[]>([]);
+  const [activePeriod, setActivePeriod] = useState<EvaluationPeriod | null>(null);
+  const [selectedPeriodId, setSelectedPeriodId] = useState('');
   const [questions, setQuestions] = useState<Question[]>([]);
   const [categories, setCategories] = useState<QuestionCategory[]>([]);
   const [questionSections, setQuestionSections] = useState<QuestionSectionOption[]>(DEFAULT_SECTION_OPTIONS);
@@ -277,6 +298,8 @@ const App: React.FC = () => {
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
   const [selectedEvaluationSection, setSelectedEvaluationSection] = useState<QuestionSection | null>(null);
   const [selectedInternalCategory, setSelectedInternalCategory] = useState<string | null>(null);
+  const [internalAnonymityChoice, setInternalAnonymityChoice] = useState<boolean | null>(null);
+  const [isInternalAnonymityPromptOpen, setIsInternalAnonymityPromptOpen] = useState(false);
   const [isLoadingSession, setIsLoadingSession] = useState(true);
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -312,7 +335,6 @@ const App: React.FC = () => {
   const logoSrc = getLogoForCampus(currentUser?.campus);
   const isDefaultLogo = logoSrc === 'logo.svg';
 
-
   useEffect(() => {
     let isMounted = true;
     supabase.auth.getSession().then(({ data }) => {
@@ -336,6 +358,9 @@ const App: React.FC = () => {
         setEmployees([]);
         setAssignments([]);
         setEvaluations([]);
+        setPeriods([]);
+        setActivePeriod(null);
+        setSelectedPeriodId('');
         setQuestions([]);
         setCategories([]);
         setQuestionSections(DEFAULT_SECTION_OPTIONS);
@@ -349,7 +374,7 @@ const App: React.FC = () => {
 
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
-        .select('id, email, name, role, group_name, campus, is_admin')
+        .select('id, email, name, role, group_name, campus, access_role, is_admin')
         .eq('id', session.user.id)
         .single();
 
@@ -366,6 +391,7 @@ const App: React.FC = () => {
       setCurrentUser(userProfile);
 
       const isAdmin = userProfile.isAdmin;
+      const isViewer = userProfile.accessRole === 'viewer';
 
       const assignmentsQuery = supabase.from('assignments').select('evaluator_id, target_id');
       if (!isAdmin) assignmentsQuery.eq('evaluator_id', userProfile.id);
@@ -375,19 +401,24 @@ const App: React.FC = () => {
 
       const evaluationsQuery = supabase
         .from('evaluations')
-        .select('evaluator_id, evaluated_id, answers, comments, created_at');
-      if (!isAdmin) evaluationsQuery.eq('evaluator_id', userProfile.id);
+        .select('evaluator_id, evaluated_id, period_id, answers, comments, is_anonymous, created_at');
+      if (!isAdmin && !isViewer) evaluationsQuery.eq('evaluator_id', userProfile.id);
 
       const [
         profilesRes,
         assignmentsRes,
         evaluatorQuestionsRes,
         evaluationsRes,
+        periodsRes,
       ] = await Promise.all([
-        supabase.from('profiles').select('id, email, name, role, group_name, campus, is_admin'),
+        supabase.from('profiles').select('id, email, name, role, group_name, campus, access_role, is_admin'),
         assignmentsQuery,
         evaluatorQuestionsQuery,
         evaluationsQuery,
+        supabase
+          .from('evaluation_periods')
+          .select('id, name, academic_year, period_number, starts_at, ends_at')
+          .order('starts_at', { ascending: false }),
       ]);
 
       const categoriesPrimary = await supabase
@@ -421,7 +452,7 @@ const App: React.FC = () => {
         .select('section, sort_order')
         .order('sort_order', { ascending: true });
 
-      if (profilesRes.error || questionsError || categoriesError || assignmentsRes.error || evaluatorQuestionsRes.error || evaluationsRes.error) {
+      if (profilesRes.error || questionsError || categoriesError || assignmentsRes.error || evaluatorQuestionsRes.error || evaluationsRes.error || periodsRes.error) {
         setAuthError('No se pudieron cargar los datos.');
         setIsLoadingData(false);
         return;
@@ -494,8 +525,10 @@ const App: React.FC = () => {
       const evaluationsList = evaluationsData.map(row => ({
         evaluatorId: row.evaluator_id,
         evaluatedId: row.evaluated_id,
+        periodId: row.period_id ?? null,
         answers: (row.answers || {}) as { [questionId: number]: number | string },
         comments: row.comments || '',
+        isAnonymous: row.is_anonymous ?? false,
         timestamp: row.created_at ? new Date(row.created_at).toLocaleString() : '',
       }));
 
@@ -503,6 +536,29 @@ const App: React.FC = () => {
         sectionOrderRes.error ? null : (sectionOrderRes.data as SectionOrderRow[] | null)
       );
       const sortedQuestions = sortQuestionsBySection(questionsList, sectionOptions);
+
+      const periodRows = (periodsRes.data || []) as PeriodRow[];
+      const periodsList: EvaluationPeriod[] = periodRows.map(row => ({
+        id: row.id,
+        name: row.name,
+        academicYear: row.academic_year,
+        periodNumber: row.period_number,
+        startsAt: row.starts_at,
+        endsAt: row.ends_at,
+      }));
+      const now = new Date();
+      const activePeriodFromList = periodsList.find(period => {
+        const start = new Date(`${period.startsAt}T00:00:00`);
+        const end = new Date(`${period.endsAt}T23:59:59`);
+        return now >= start && now <= end;
+      }) ?? null;
+
+      setPeriods(periodsList);
+      setActivePeriod(activePeriodFromList);
+      setSelectedPeriodId(prev => {
+        if (prev && periodsList.some(period => period.id === prev)) return prev;
+        return activePeriodFromList?.id ?? (periodsList[0]?.id ?? '');
+      });
 
       setEmployees(employeesList);
       setQuestions(sortedQuestions);
@@ -525,8 +581,17 @@ const App: React.FC = () => {
   }, [session]);
 
   useEffect(() => {
-    if (!currentUser?.isAdmin && view !== 'survey') {
-      setView('survey');
+    if (!currentUser) return;
+    const isViewer = !currentUser.isAdmin && currentUser.accessRole === 'viewer';
+    const canViewResults = currentUser.isAdmin || isViewer;
+    const canViewSurvey = true;
+    const isAllowedView = (
+      (view === 'survey' && canViewSurvey)
+      || (view === 'results' && canViewResults)
+      || ((view === 'admin' || view === 'questions') && currentUser.isAdmin)
+    );
+    if (!isAllowedView) {
+      setView(isViewer ? 'results' : 'survey');
     }
   }, [currentUser, view]);
 
@@ -535,7 +600,7 @@ const App: React.FC = () => {
     setAuthError(null);
     setLinkSent(false);
     if (!emailInput.trim() || !passwordInput) {
-      setAuthError('Ingresa correo y contrasena.');
+      setAuthError('Ingresa correo y contraseña.');
       return;
     }
     setIsSigningIn(true);
@@ -545,7 +610,7 @@ const App: React.FC = () => {
     });
     setIsSigningIn(false);
     if (error) {
-      setAuthError('No se pudo iniciar sesion.');
+      setAuthError('No se pudo iniciar sesión.');
     }
   };
 
@@ -553,11 +618,11 @@ const App: React.FC = () => {
     event.preventDefault();
     setPasswordError(null);
     if (newPassword.length < 6) {
-      setPasswordError('La contrasena debe tener al menos 6 caracteres.');
+      setPasswordError('La contraseña debe tener al menos 6 caracteres.');
       return;
     }
     if (newPassword !== confirmPassword) {
-      setPasswordError('Las contrasenas no coinciden.');
+      setPasswordError('Las contraseñas no coinciden.');
       return;
     }
     setIsUpdatingPassword(true);
@@ -568,7 +633,7 @@ const App: React.FC = () => {
     });
     setIsUpdatingPassword(false);
     if (error) {
-      setPasswordError('No se pudo actualizar la contrasena.');
+      setPasswordError('No se pudo actualizar la contraseña.');
       return;
     }
     setNewPassword('');
@@ -616,6 +681,8 @@ const App: React.FC = () => {
     setSelectedTargetId(null);
     setSelectedEvaluationSection(null);
     setSelectedInternalCategory(null);
+    setInternalAnonymityChoice(null);
+    setIsInternalAnonymityPromptOpen(false);
     setView('survey');
   };
 
@@ -627,6 +694,21 @@ const App: React.FC = () => {
     setSelectedTargetId(null);
     setSelectedEvaluationSection(null);
     setSelectedInternalCategory(null);
+    setInternalAnonymityChoice(null);
+    setIsInternalAnonymityPromptOpen(false);
+  };
+
+  const handleStartInternalSurvey = () => {
+    setSelectedTargetId(null);
+    setSelectedInternalCategory(null);
+    setInternalAnonymityChoice(null);
+    setIsInternalAnonymityPromptOpen(true);
+  };
+
+  const handleInternalAnonymityChoice = (isAnonymous: boolean) => {
+    setInternalAnonymityChoice(isAnonymous);
+    setIsInternalAnonymityPromptOpen(false);
+    setSelectedEvaluationSection('internal');
   };
 
   const formatInternalCommentBlock = (category: string | null, comment: string) => {
@@ -637,6 +719,28 @@ const App: React.FC = () => {
       return `[[internal|${safeCategory}]] ${trimmed}`;
     }
     return `[[internal]] ${trimmed}`;
+  };
+  const parseInternalCommentBlocks = (comments: string) => {
+    const blocks = comments.split(/\n\s*\n/);
+    const byCategory = new Map<string, string>();
+    const uncategorized: string[] = [];
+    blocks.forEach((block) => {
+      const trimmed = block.trim();
+      if (!trimmed) return;
+      const match = trimmed.match(/^\[\[internal(?:\|([^\]]+))?\]\]\s*([\s\S]*)$/);
+      if (match) {
+        const category = (match[1] || '').trim();
+        const body = (match[2] || '').trim();
+        if (category) {
+          byCategory.set(category, body);
+        } else if (body) {
+          uncategorized.push(body);
+        }
+        return;
+      }
+      uncategorized.push(trimmed);
+    });
+    return { byCategory, uncategorized: uncategorized.join('\n\n') };
   };
 
   const getInternalCategoriesFromAnswers = (answers: Record<number, number | string>) => {
@@ -651,9 +755,20 @@ const App: React.FC = () => {
   };
 
   const handleSaveEvaluation = async (evalData: Evaluation) => {
+    const periodId = activePeriod?.id;
+    if (!periodId) {
+      showAlert('No hay un período de evaluación activo.');
+      return false;
+    }
     const existingEvaluation = evaluations.find(
-      evaluation => evaluation.evaluatorId === evalData.evaluatorId && evaluation.evaluatedId === evalData.evaluatedId
+      evaluation => evaluation.evaluatorId === evalData.evaluatorId
+        && evaluation.evaluatedId === evalData.evaluatedId
+        && evaluation.periodId === periodId
     );
+    if (selectedEvaluationSection === 'internal' && internalAnonymityChoice === null && !existingEvaluation) {
+      showAlert('Selecciona si deseas que la encuesta sea anonima antes de continuar.');
+      return false;
+    }
     const shouldMerge = selectedEvaluationSection === 'internal' && existingEvaluation;
     const mergedAnswers = shouldMerge
       ? { ...existingEvaluation.answers, ...evalData.answers }
@@ -669,6 +784,9 @@ const App: React.FC = () => {
     const mergedComments = shouldMerge
       ? [existingComments, newCommentBlock].filter(Boolean).join('\n\n')
       : newCommentBlock;
+    const resolvedAnonymity = selectedEvaluationSection === 'internal'
+      ? Boolean(internalAnonymityChoice ?? existingEvaluation?.isAnonymous)
+      : false;
 
     const { error } = await supabase
       .from('evaluations')
@@ -676,20 +794,32 @@ const App: React.FC = () => {
         {
           evaluator_id: evalData.evaluatorId,
           evaluated_id: evalData.evaluatedId,
+          period_id: periodId,
           answers: mergedAnswers,
           comments: mergedComments,
+          is_anonymous: resolvedAnonymity,
         },
-        { onConflict: 'evaluator_id,evaluated_id' }
+        { onConflict: 'evaluator_id,evaluated_id,period_id' }
       );
 
     if (error) {
-      showAlert('No se pudo guardar la evaluacion.');
+      showAlert('No se pudo guardar la evaluación.');
       return false;
     }
 
     setEvaluations(prev => {
-      const filtered = prev.filter(e => !(e.evaluatorId === evalData.evaluatorId && e.evaluatedId === evalData.evaluatedId));
-      return [...filtered, { ...evalData, answers: mergedAnswers, comments: mergedComments }];
+      const filtered = prev.filter(e => !(
+        e.evaluatorId === evalData.evaluatorId
+        && e.evaluatedId === evalData.evaluatedId
+        && e.periodId === periodId
+      ));
+      return [...filtered, {
+        ...evalData,
+        periodId,
+        answers: mergedAnswers,
+        comments: mergedComments,
+        isAnonymous: resolvedAnonymity,
+      }];
     });
     setSelectedTargetId(null);
     if (selectedEvaluationSection === 'internal') {
@@ -915,7 +1045,7 @@ const App: React.FC = () => {
       sort_order: nextSortOrder,
     });
     if (error) {
-      showAlert('No se pudo crear la categoria.');
+      showAlert('No se pudo crear la categoría.');
       return;
     }
     setCategories(prev => [...prev, { name, section, sortOrder: nextSortOrder, description: trimmedDescription || '' }]);
@@ -924,7 +1054,7 @@ const App: React.FC = () => {
     const trimmedDescription = description?.trim();
     const { error } = await supabase.from('question_categories').update({ name: nextName, description: trimmedDescription || null }).eq('name', prevName);
     if (error) {
-      showAlert('No se pudo actualizar la categoria.');
+      showAlert('No se pudo actualizar la categoría.');
       return;
     }
     setCategories(prev => prev.map(cat => (cat.name === prevName ? { ...cat, name: nextName, description: trimmedDescription || '' } : cat)));
@@ -939,7 +1069,7 @@ const App: React.FC = () => {
     }
     const { error: deleteError } = await supabase.from('question_categories').delete().eq('name', name);
     if (deleteError) {
-      showAlert('No se pudo eliminar la categoria.');
+      showAlert('No se pudo eliminar la categoría.');
       return;
     }
     setCategories(prev => prev.filter(cat => cat.name !== name));
@@ -956,7 +1086,7 @@ const App: React.FC = () => {
       .from('question_categories')
       .upsert(rows, { onConflict: 'name' });
     if (error) {
-      showAlert('No se pudo actualizar el orden de categorias.');
+      showAlert('No se pudo actualizar el orden de categorías.');
       return;
     }
     const orderMap = new Map(orderedNames.map((name, index) => [name, index]));
@@ -966,11 +1096,11 @@ const App: React.FC = () => {
         : cat
     )));
   };
-  const handleCreateUser = async (payload: { email: string; name: string; role: string; group: string; campus: string; isAdmin: boolean }) => {
+  const handleCreateUser = async (payload: { email: string; name: string; role: string; group: string; campus: string; isAdmin: boolean; accessRole: AccessRole }) => {
     const { data: sessionData } = await supabase.auth.getSession();
     const accessToken = sessionData.session?.access_token;
     if (!accessToken || !supabaseUrl || !supabaseAnonKey) {
-      throw new Error('Sesion no valida.');
+      throw new Error('Sesión no válida.');
     }
 
     const response = await fetch(`${supabaseUrl}/functions/v1/admin-create-user`, {
@@ -987,6 +1117,7 @@ const App: React.FC = () => {
         group: payload.group,
         campus: payload.campus,
         is_admin: payload.isAdmin,
+        access_role: payload.accessRole,
       }),
     });
     const data = await response.json().catch(() => null);
@@ -1007,7 +1138,7 @@ const App: React.FC = () => {
     const { data: sessionData } = await supabase.auth.getSession();
     const accessToken = sessionData.session?.access_token;
     if (!accessToken || !supabaseUrl || !supabaseAnonKey) {
-      throw new Error('Sesion no valida.');
+      throw new Error('Sesión no válida.');
     }
 
     const response = await fetch(`${supabaseUrl}/functions/v1/admin-reset-password`, {
@@ -1024,19 +1155,22 @@ const App: React.FC = () => {
     });
     if (!response.ok) {
       const data = await response.json().catch(() => null);
-      throw new Error(data?.error || 'No se pudo restablecer la contrasena.');
+      throw new Error(data?.error || 'No se pudo restablecer la contraseña.');
     }
 
   };
 
   const exportToCSV = () => {
-    if (evaluations.length === 0) return;
+    const exportEvaluations = selectedPeriodId
+      ? evaluations.filter(e => e.periodId === selectedPeriodId)
+      : evaluations;
+    if (exportEvaluations.length === 0) return;
     if (questions.length === 0) {
       showAlert("No hay preguntas configuradas.");
       return;
     }
     const headers = ["Evaluador", "Evaluado", ...questions.map(q => `P${q.id}`), "Comentarios", "Fecha"];
-    const rows = evaluations.map(e => {
+    const rows = exportEvaluations.map(e => {
       const evaluator = employees.find(emp => emp.id === e.evaluatorId)?.name || 'N/A';
       const evaluated = employees.find(emp => emp.id === e.evaluatedId)?.name || 'N/A';
       const scores = questions.map(q => {
@@ -1057,6 +1191,33 @@ const App: React.FC = () => {
   };
 
   const isAdmin = Boolean(currentUser?.isAdmin);
+  const accessRole = currentUser?.accessRole ?? 'educator';
+  const isViewer = !isAdmin && accessRole === 'viewer';
+  const canViewResults = isAdmin || isViewer;
+  const canViewSurvey = true;
+  const activePeriodId = activePeriod?.id ?? '';
+  const hasActivePeriod = Boolean(activePeriodId);
+  const surveyDaysRemaining = activePeriod
+    ? Math.max(
+      0,
+      Math.ceil(
+        (new Date(`${activePeriod.endsAt}T23:59:59`).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+      )
+    )
+    : null;
+  const surveyDaysRemainingLabel = surveyDaysRemaining === null
+    ? ''
+    : surveyDaysRemaining <= 1
+      ? 'Hoy es el ultimo dia para realizar encuestas.'
+      : `Quedan ${surveyDaysRemaining} días antes de que se cierre el período de encuestas.`;
+  const isLastSurveyDay = surveyDaysRemaining === 1;
+  const surveyEvaluations = activePeriodId
+    ? evaluations.filter(e => e.periodId === activePeriodId)
+    : [];
+  const resultsEvaluations = selectedPeriodId
+    ? evaluations.filter(e => e.periodId === selectedPeriodId)
+    : evaluations;
+  const selectedPeriod = periods.find(period => period.id === selectedPeriodId) ?? activePeriod;
   const questionIdsForCurrentUser = currentUser
     ? evaluatorQuestions[currentUser.id] || questions.map(question => question.id)
     : [];
@@ -1087,17 +1248,37 @@ const App: React.FC = () => {
   const selectedInternalCategoryDescription = selectedInternalCategory
     ? getCategoryDescription(selectedInternalCategory, 'internal')
     : '';
+  const internalEvaluation = currentUser
+    ? surveyEvaluations.find(e => e.evaluatorId === currentUser.id && e.evaluatedId === currentUser.id)
+    : null;
+  const peerEvaluation = currentUser && selectedTargetId
+    ? surveyEvaluations.find(e => e.evaluatorId === currentUser.id && e.evaluatedId === selectedTargetId)
+    : null;
+  const activeEvaluation = selectedEvaluationSection === 'internal' ? internalEvaluation : peerEvaluation;
+  const internalCommentData = internalEvaluation
+    ? parseInternalCommentBlocks(internalEvaluation.comments)
+    : { byCategory: new Map<string, string>(), uncategorized: '' };
+  const selectedInternalCategoryComment = selectedInternalCategory
+    ? internalCommentData.byCategory.get(selectedInternalCategory)
+      ?? (internalCommentData.byCategory.size === 0 ? internalCommentData.uncategorized : '')
+    : '';
+  const evaluationInitialAnswers = activeEvaluation?.answers ?? {};
+  const evaluationInitialComments = selectedEvaluationSection === 'internal'
+    ? selectedInternalCategoryComment
+    : (activeEvaluation?.comments ?? '');
+  const evaluationFormKey = selectedEvaluationSection === 'internal'
+    ? `internal-${currentUser?.id ?? 'none'}-${selectedInternalCategory ?? 'none'}-${activeEvaluation?.timestamp ?? 'new'}`
+    : `peer-${currentUser?.id ?? 'none'}-${selectedTargetId ?? 'none'}-${activeEvaluation?.timestamp ?? 'new'}`;
   const internalQuestionsForSelectedCategory = selectedInternalCategory
     ? internalQuestionsForCurrentUser.filter(question => question.category === selectedInternalCategory)
     : [];
-  const internalEvaluation = currentUser
-    ? evaluations.find(e => e.evaluatorId === currentUser.id && e.evaluatedId === currentUser.id)
-    : null;
+
   const hasAnswer = (question: Question, value: number | string | undefined) => {
     if (question.type === 'text') {
       return typeof value === 'string' && value.trim().length > 0;
     }
-    return typeof value === 'number';
+    if (typeof value === 'number') return true;
+    return typeof value === 'string' && value.trim().length > 0;
   };
   const internalEvaluationCompleted = Boolean(
     internalEvaluation
@@ -1135,10 +1316,10 @@ const App: React.FC = () => {
     : [];
 
   const tabs = [
-    { id: 'survey', label: 'Encuestas', icon: ClipboardList, show: true },
-    { id: 'results', label: 'Resultados', icon: LayoutDashboard, show: isAdmin },
+    { id: 'survey', label: 'Encuestas', icon: ClipboardList, show: canViewSurvey },
+    { id: 'results', label: 'Resultados', icon: LayoutDashboard, show: canViewResults },
     { id: 'questions', label: 'Preguntas', icon: HelpCircle, show: isAdmin },
-    { id: 'admin', label: 'Administracion', icon: Settings, show: isAdmin },
+    { id: 'admin', label: 'Administración', icon: Settings, show: isAdmin },
   ].filter(tab => tab.show);
 
   const mustChangePassword = false;
@@ -1267,8 +1448,8 @@ const App: React.FC = () => {
       <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50" style={themeStyle}>
         <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
           <div className="text-center mb-6">
-            <h1 className="text-2xl font-bold text-slate-800">Actualiza tu contrasena</h1>
-            <p className="text-slate-500 mt-2">Debes cambiar la contrasena inicial para continuar.</p>
+            <h1 className="text-2xl font-bold text-slate-800">Actualiza tu contraseña</h1>
+            <p className="text-slate-500 mt-2">Debes cambiar la contraseña inicial para continuar.</p>
           </div>
           {passwordError && (
             <div className="text-sm text-red-600 bg-red-50 border border-red-100 p-3 rounded-lg mb-4">
@@ -1277,7 +1458,7 @@ const App: React.FC = () => {
           )}
           <form onSubmit={handleUpdatePassword} className="space-y-4">
             <div>
-              <label className="text-xs font-semibold text-slate-600">Nueva contrasena</label>
+              <label className="text-xs font-semibold text-slate-600">Nueva contraseña</label>
               <input
                 type="password"
                 value={newPassword}
@@ -1286,7 +1467,7 @@ const App: React.FC = () => {
               />
             </div>
             <div>
-              <label className="text-xs font-semibold text-slate-600">Confirmar contrasena</label>
+              <label className="text-xs font-semibold text-slate-600">Confirmar contraseña</label>
               <input
                 type="password"
                 value={confirmPassword}
@@ -1299,14 +1480,14 @@ const App: React.FC = () => {
               disabled={isUpdatingPassword}
               className="w-full bg-[var(--color-primary)] hover:bg-[var(--color-primary-dark)] text-white px-4 py-3 rounded-lg font-semibold disabled:opacity-60"
             >
-              {isUpdatingPassword ? 'Actualizando...' : 'Actualizar contrasena'}
+              {isUpdatingPassword ? 'Actualizando...' : 'Actualizar contraseña'}
             </button>
           </form>
           <button
             onClick={handleLogout}
             className="w-full mt-4 text-sm text-slate-500 hover:text-slate-700"
           >
-            Cerrar sesion
+            Cerrar sesión
           </button>
         </div>
       </div>
@@ -1348,7 +1529,7 @@ const App: React.FC = () => {
                 );
               })}
             </div>
-            <button onClick={handleLogout} className="p-2 text-slate-400 hover:text-red-600 hover:bg-slate-100 rounded-full transition-colors" aria-label="Cerrar sesion">
+            <button onClick={handleLogout} className="p-2 text-slate-400 hover:text-red-600 hover:bg-slate-100 rounded-full transition-colors" aria-label="Cerrar sesión">
               <LogOut size={20} />
             </button>
           </nav>
@@ -1361,27 +1542,32 @@ const App: React.FC = () => {
             {authError}
           </div>
         )}
-        {view === 'survey' && (
+        {view === 'survey' && canViewSurvey && (
           <div className="space-y-8">
-            {!selectedEvaluationSection ? (
+            {!hasActivePeriod ? (
+              <div className="text-center py-16 bg-white rounded-xl border text-slate-500">
+                No hay un período de evaluación activo. Contacta al administrador.
+              </div>
+            ) : !selectedEvaluationSection ? (
               <div className="max-w-3xl mx-auto space-y-8">
                 <div>
+                  {surveyDaysRemainingLabel && (
+                    <div className={`mt-3 flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold w-fit text-left ${isLastSurveyDay ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-800'}`}>
+                      {surveyDaysRemainingLabel}
+                    </div>
+                  )}
                   <h2 className="text-2xl font-bold text-slate-800">Tus evaluaciones pendientes</h2>
-                  <p className="text-slate-500">Selecciona la seccion que deseas completar.</p>
+                  <p className="text-slate-500">Selecciona la sección que deseas completar.</p>
                 </div>
 
                 {internalQuestionsForCurrentUser.length > 0 && (
                   <div>
                     <div className="mb-4">
-                      <h3 className="text-lg font-semibold text-slate-800">Satisfaccion interna</h3>
-                      <p className="text-sm text-slate-500">Evalua la institucion y las condiciones internas.</p>
+                      <h3 className="text-lg font-semibold text-slate-800">Satisfacción interna</h3>
+                      <p className="text-sm text-slate-500">Evalúa la institución y las condiciones internas.</p>
                     </div>
                     <button
-                      onClick={() => {
-                        setSelectedEvaluationSection('internal');
-                        setSelectedInternalCategory(null);
-                        setSelectedTargetId(null);
-                      }}
+                      onClick={handleStartInternalSurvey}
                       className={`flex items-center justify-between w-full p-5 rounded-xl border-2 transition-all ${internalEvaluationCompleted ? 'bg-[var(--color-complete-soft)] border-[var(--color-complete-border)]' : 'bg-white border-slate-100 hover:border-[var(--color-primary-border)] hover:shadow-md'}`}
                     >
                       <div className="flex items-center gap-4 text-left">
@@ -1389,7 +1575,7 @@ const App: React.FC = () => {
                           SI
                         </div>
                         <div>
-                          <h4 className="font-semibold text-slate-800">Satisfaccion interna</h4>
+                          <h4 className="font-semibold text-slate-800">Satisfacción interna</h4>
                           <p className="text-sm text-slate-500">Encuesta institucional</p>
                         </div>
                       </div>
@@ -1404,18 +1590,18 @@ const App: React.FC = () => {
 
                 <div>
                   <div className="mb-4">
-                    <h3 className="text-lg font-semibold text-slate-800">Evaluacion de pares</h3>
+                    <h3 className="text-lg font-semibold text-slate-800">Evaluación de pares</h3>
                     <p className="text-sm text-slate-500">Companeros asignados para calificar.</p>
                   </div>
                   <div className="grid gap-4">
                     {peerQuestionsForCurrentUser.length === 0 ? (
                       <div className="text-center py-12 bg-white rounded-xl border text-slate-400">
-                        No hay preguntas para evaluacion de pares configuradas.
+                        No hay preguntas para evaluación de pares configuradas.
                       </div>
                     ) : (
                       <>
                         {targetsToEvaluate.map(target => {
-                          const evaluation = evaluations.find(e => e.evaluatorId === currentUser.id && e.evaluatedId === target.id);
+                          const evaluation = surveyEvaluations.find(e => e.evaluatorId === currentUser.id && e.evaluatedId === target.id);
                           const isCompleted = Boolean(evaluation);
                           const allPeerAnswered = evaluation
                             ? peerQuestionsForCurrentUser.every(question => hasAnswer(question, evaluation.answers[question.id]))
@@ -1469,13 +1655,13 @@ const App: React.FC = () => {
                 {selectedEvaluationSection === 'internal' && !selectedInternalCategory ? (
                   <div className="space-y-4">
                     <div>
-                      <h3 className="text-lg font-semibold text-slate-800">Categorias de satisfaccion interna</h3>
+                      <h3 className="text-lg font-semibold text-slate-800">Categorías de satisfacción interna</h3>
                       <p className="text-sm text-slate-500">Selecciona el area que deseas evaluar.</p>
                     </div>
                     <div className="grid gap-4">
                       {internalCategories.length === 0 ? (
                         <div className="text-center py-12 bg-white rounded-xl border text-slate-400">
-                          No hay categorias configuradas para satisfaccion interna.
+                          No hay categorías configuradas para satisfacción interna.
                         </div>
                       ) : (
                         internalCategories.map(category => {
@@ -1511,13 +1697,16 @@ const App: React.FC = () => {
                   </div>
                 ) : (
                   <EvaluationForm
+                    key={evaluationFormKey}
                     evaluatorId={currentUser.id}
                     targetEmployee={selectedEvaluationSection === 'internal'
-                      ? { ...currentUser, name: 'Institucion', role: `Satisfaccion interna${selectedInternalCategory ? ` - ${selectedInternalCategory}` : ''}` }
+                      ? { ...currentUser, name: 'Institución', role: `Satisfacción interna${selectedInternalCategory ? ` - ${selectedInternalCategory}` : ''}` }
                       : employees.find(e => e.id === selectedTargetId)!}
                     questions={selectedEvaluationSection === 'internal' ? internalQuestionsForSelectedCategory : peerQuestionsForCurrentUser}
                     sectionTitle={selectedEvaluationSection === 'internal' ? selectedInternalCategory ?? undefined : undefined}
                     sectionDescription={selectedEvaluationSection === 'internal' ? (selectedInternalCategoryDescription || undefined) : undefined}
+                    initialAnswers={evaluationInitialAnswers}
+                    initialComments={evaluationInitialComments}
                     onSave={handleSaveEvaluation}
                   />
                 )}
@@ -1526,18 +1715,35 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {view === 'results' && isAdmin && (
+        {view === 'results' && canViewResults && (
           <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
               <div>
                 <h2 className="text-2xl font-bold text-slate-800">Panel de resultados</h2>
-                <p className="text-slate-500">Estadisticas y analisis de desempeno.</p>
+                <p className="text-slate-500">Estadísticas y análisis de desempeño.</p>
               </div>
-              <button onClick={exportToCSV} className="flex items-center gap-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-dark)] text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-all" disabled={evaluations.length === 0}>
-                <Download size={18} /> Exportar CSV
-              </button>
+              <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+                <label className="text-xs font-semibold text-slate-500">
+                  Período
+                  <select
+                    value={selectedPeriodId}
+                    onChange={(event) => setSelectedPeriodId(event.target.value)}
+                    className="mt-2 sm:mt-0 sm:ml-2 px-3 py-2 text-sm border rounded-lg bg-white"
+                  >
+                    <option value="">Todos</option>
+                    {periods.map(period => (
+                      <option key={period.id} value={period.id}>{period.name}  -  {period.academicYear}</option>
+                    ))}
+                  </select>
+                </label>
+                {isAdmin && (
+                  <button onClick={exportToCSV} className="flex items-center gap-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-dark)] text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-all" disabled={resultsEvaluations.length === 0}>
+                    <Download size={18} /> Exportar CSV
+                  </button>
+                )}
+              </div>
             </div>
-            <ResultsDashboard evaluations={evaluations} employees={employees} questions={questions} assignments={assignments} />
+            <ResultsDashboard evaluations={resultsEvaluations} employees={employees} questions={questions} assignments={assignments} />
           </div>
         )}
 
@@ -1573,6 +1779,36 @@ const App: React.FC = () => {
           />
         )}
       </main>
+      {isInternalAnonymityPromptOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+          <div
+            className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-100 p-8"
+            role="dialog"
+            aria-modal="true"
+          >
+            <h3 className="text-xl font-bold text-slate-800">Anonimato en la encuesta</h3>
+            <p className="mt-3 text-base text-slate-600">
+              Esta encuesta se realizara utilizando tus datos, si quieres que esta encuesta sea anonima hazlo saber seleccionando las opciones que aparecen en pantalla.
+            </p>
+            <div className="mt-6 flex flex-col sm:flex-row gap-3">
+              <button
+                type="button"
+                onClick={() => handleInternalAnonymityChoice(true)}
+                className="flex-1 bg-[var(--color-primary)] hover:bg-[var(--color-primary-dark)] text-white px-4 py-3 rounded-lg font-semibold"
+              >
+                Quiero que sea anonima
+              </button>
+              <button
+                type="button"
+                onClick={() => handleInternalAnonymityChoice(false)}
+                className="flex-1 border border-slate-200 text-slate-700 hover:bg-slate-50 px-4 py-3 rounded-lg font-semibold"
+              >
+                Quiero que se muestren mis datos
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Assignment, Evaluation, Employee, Question } from '../types.ts';
+import { getScaleScore } from '../scoreUtils.ts';
 import { analyzeEvaluations } from '../geminiService.ts';
 import { Sparkles, BarChart3, TrendingUp, Copy, Download } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -17,6 +18,7 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
   const { showAlert } = useModal();
   const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null);
   const [viewMode, setViewMode] = useState<'employee' | 'general'>('employee');
+  const [selectedCampus, setSelectedCampus] = useState('all');
   const [selectedInternalCategory, setSelectedInternalCategory] = useState('');
   const [aiAnalysis, setAiAnalysis] = useState<string>('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -41,12 +43,43 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
   const internalQuestions = questions.filter(question => question.section === 'internal');
   const peerQuestionIds = new Set(peerQuestions.map(question => question.id));
   const internalQuestionIds = new Set(internalQuestions.map(question => question.id));
+  const normalizeOptionLabel = (value: string) => value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+  const NON_SCORING_OPTION_LABELS = [
+    'no uso la plataforma',
+    'no he presentado solicitudes de reembolso',
+  ];
+  const isNonScoringOptionLabel = (label: string) =>
+    NON_SCORING_OPTION_LABELS.some(term => normalizeOptionLabel(label).includes(term));
+  const isNonScoringAnswer = (question: Question, score: number) => {
+    if (!question.options || question.options.length === 0) return false;
+    const noUseIndex = question.options.findIndex(option => isNonScoringOptionLabel(option));
+    if (noUseIndex < 0) return false;
+    return score === getScaleScore(noUseIndex, question.options.length);
+  };
   const assignedCountByTarget: Record<string, number> = {};
   assignments.forEach(assignment => {
     assignment.targets.forEach(targetId => {
       assignedCountByTarget[targetId] = (assignedCountByTarget[targetId] || 0) + 1;
     });
   });
+
+  const campusOptions = Array.from(
+    new Set(employees.map(emp => (emp.campus || '').trim()).filter(Boolean))
+  ).sort((a, b) => a.localeCompare(b, 'es'));
+  const normalizedSelectedCampus = selectedCampus.trim().toLowerCase();
+  const filteredEmployees = selectedCampus === 'all'
+    ? employees
+    : employees.filter(emp => (emp.campus || '').trim().toLowerCase() === normalizedSelectedCampus);
+  const filteredEmployeeIds = new Set(filteredEmployees.map(emp => emp.id));
+  const filteredEvaluations = selectedCampus === 'all'
+    ? evaluations
+    : evaluations.filter(evaluation =>
+        filteredEmployeeIds.has(evaluation.evaluatedId) || filteredEmployeeIds.has(evaluation.evaluatorId)
+      );
 
   const escapeCsvValue = (value: string | number | null | undefined) => {
     if (value === null || value === undefined) return '';
@@ -57,17 +90,37 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
     return stringValue;
   };
 
-  const buildEvaluationCsv = (evaluationList: Evaluation[], questionList: Question[]) => {
-    const headers = ['Evaluador', 'Evaluado', ...questionList.map(question => question.text), 'Comentarios', 'Fecha'];
+  const buildEvaluationCsv = (
+    evaluationList: Evaluation[],
+    questionList: Question[],
+    options: { includeAnonymous?: boolean } = {}
+  ) => {
+    const includeAnonymous = options.includeAnonymous ?? false;
+    const headers = [
+      'Evaluador',
+      'Evaluado',
+      ...(includeAnonymous ? ['Anonimo'] : []),
+      ...questionList.map(question => question.text),
+      'Comentarios',
+      'Fecha',
+    ];
     const rows = evaluationList.map((evaluation) => {
       const evaluator = employees.find(emp => emp.id === evaluation.evaluatorId)?.name || 'N/A';
       const evaluated = employees.find(emp => emp.id === evaluation.evaluatedId)?.name || 'N/A';
+      const anonymity = includeAnonymous ? [evaluation.isAnonymous ? 'Si' : 'No'] : [];
       const answers = questionList.map((question) => {
         const value = evaluation.answers[question.id];
-        if (typeof value === 'number' || typeof value === 'string') return value;
+        if (typeof value === 'number') {
+          if (isNonScoringAnswer(question, value)) {
+            const noUseLabel = question.options?.find(option => isNonScoringOptionLabel(option)) || '';
+            return noUseLabel;
+          }
+          return value;
+        }
+        if (typeof value === 'string') return value;
         return '';
       });
-      return [evaluator, evaluated, ...answers, evaluation.comments || '', evaluation.timestamp];
+      return [evaluator, evaluated, ...anonymity, ...answers, evaluation.comments || '', evaluation.timestamp];
     });
     return [headers, ...rows]
       .map(row => row.map(escapeCsvValue).join(','))
@@ -92,12 +145,18 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
     return `${prefix}${safeSuffix ? `_${safeSuffix}` : ''}_${dateStamp}.csv`;
   };
 
-  const filterEvaluationsByQuestions = (questionIds: Set<number>, targetList: Evaluation[] = evaluations) =>
+  const filterEvaluationsByQuestions = (questionIds: Set<number>, targetList: Evaluation[] = filteredEvaluations) =>
     targetList.filter(evaluation =>
       Object.keys(evaluation.answers).some(questionId => questionIds.has(Number(questionId)))
     );
 
-  const exportCsv = (filename: string, evaluationList: Evaluation[], questionList: Question[], emptyMessage: string) => {
+  const exportCsv = (
+    filename: string,
+    evaluationList: Evaluation[],
+    questionList: Question[],
+    emptyMessage: string,
+    options: { includeAnonymous?: boolean } = {}
+  ) => {
     if (questionList.length === 0) {
       showAlert('No hay preguntas configuradas para exportar.');
       return;
@@ -113,7 +172,7 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
       showAlert('No hay respuestas disponibles para exportar.');
       return;
     }
-    const csvContent = buildEvaluationCsv(evaluationList, filteredQuestions);
+    const csvContent = buildEvaluationCsv(evaluationList, filteredQuestions, options);
     downloadCsv(filename, csvContent);
   };
 
@@ -124,7 +183,7 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
     }
     const evaluationsForEmployee = filterEvaluationsByQuestions(
       peerQuestionIds,
-      evaluations.filter(evaluation => evaluation.evaluatedId === selectedEmp.id)
+      filteredEvaluations.filter(evaluation => evaluation.evaluatedId === selectedEmp.id)
     );
     exportCsv(
       buildFilename('evaluaciones_pares', selectedEmp.name),
@@ -137,7 +196,7 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
   const handleExportGeneralPeer = () => {
     const relevant = filterEvaluationsByQuestions(peerQuestionIds);
     exportCsv(
-      buildFilename('desempeno_general'),
+      buildFilename('desempeño_general'),
       relevant,
       peerQuestions,
       'No hay evaluaciones de pares registradas.'
@@ -147,21 +206,22 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
   const handleExportGeneralInternal = () => {
     const relevant = filterEvaluationsByQuestions(internalQuestionIds);
     exportCsv(
-      buildFilename('satisfaccion_interna'),
+      buildFilename('satisfacción_interna'),
       relevant,
       internalQuestions,
-      'No hay evaluaciones internas registradas.'
+      'No hay evaluaciones internas registradas.',
+      { includeAnonymous: true }
     );
   };
 
   const isZeroToTenQuestion = (question: Question) =>     question.text.toLowerCase().includes('en una escala del 0 al 10');    const normalizeZeroToTenValue = (value: number, question: Question) => {     if (question.options && question.options.length === 11) {       return value - 1;     }     if (value > 10) return value - 1;     return value;   };    const getPointValue = (question: Question, score: number) => {     if (isZeroToTenQuestion(question)) {       const normalized = normalizeZeroToTenValue(score, question);       if (normalized >= 9) return 1;       if (normalized >= 7) return 0;       return -1;     }     return score;   }; 
-  const getStatsForEmployee = (empId: string) => {     const relevant = evaluations.filter(e => {       if (e.evaluatedId !== empId) return false;       return Object.keys(e.answers).some(qId => peerQuestionMap.has(parseInt(qId, 10)));     });     if (relevant.length === 0) return null;      const categoryScores: { [key: string]: { total: number } } = {};     relevant.forEach(evalu => {       Object.entries(evalu.answers).forEach(([qId, score]) => {         const question = peerQuestionMap.get(parseInt(qId, 10));         if (question && question.type !== 'text' && typeof score === 'number') {           if (!categoryScores[question.category]) categoryScores[question.category] = { total: 0 };           categoryScores[question.category].total += getPointValue(question, score);         }       });     });      const categories = Object.entries(categoryScores).map(([name, data]) => ({       name,       total: data.total     }));      return { categories, totalEvaluations: relevant.length };   };
+  const getStatsForEmployee = (empId: string) => {     const relevant = filteredEvaluations.filter(e => {       if (e.evaluatedId !== empId) return false;       return Object.keys(e.answers).some(qId => peerQuestionMap.has(parseInt(qId, 10)));     });     if (relevant.length === 0) return null;      const categoryScores: { [key: string]: { total: number } } = {};     relevant.forEach(evalu => {       Object.entries(evalu.answers).forEach(([qId, score]) => {         const question = peerQuestionMap.get(parseInt(qId, 10));         if (question && question.type !== 'text' && typeof score === 'number' && !isNonScoringAnswer(question, score)) {           if (!categoryScores[question.category]) categoryScores[question.category] = { total: 0 };           categoryScores[question.category].total += getPointValue(question, score);         }       });     });      const categories = Object.entries(categoryScores).map(([name, data]) => ({       name,       total: data.total     }));      return { categories, totalEvaluations: relevant.length };   };
 
-  const getInternalStats = (empId: string) => {     if (internalQuestionMap.size === 0) return null;     const relevant = evaluations.filter(evalu => {       if (evalu.evaluatedId !== empId) return false;       return Object.keys(evalu.answers).some(qId => internalQuestionMap.has(parseInt(qId, 10)));     });     if (relevant.length === 0) return null;      const categoryScores: { [key: string]: { total: number } } = {};     relevant.forEach(evalu => {       Object.entries(evalu.answers).forEach(([qId, score]) => {         const question = internalQuestionMap.get(parseInt(qId, 10));         if (question && question.type !== 'text' && typeof score === 'number') {           if (!categoryScores[question.category]) categoryScores[question.category] = { total: 0 };           categoryScores[question.category].total += getPointValue(question, score);         }       });     });      const categories = Object.entries(categoryScores).map(([name, data]) => ({       name,       total: data.total     }));      return { categories, totalEvaluations: relevant.length };   };
+  const getInternalStats = (empId: string) => {     if (internalQuestionMap.size === 0) return null;     const relevant = filteredEvaluations.filter(evalu => {       if (evalu.evaluatedId !== empId) return false;       return Object.keys(evalu.answers).some(qId => internalQuestionMap.has(parseInt(qId, 10)));     });     if (relevant.length === 0) return null;      const categoryScores: { [key: string]: { total: number } } = {};     relevant.forEach(evalu => {       Object.entries(evalu.answers).forEach(([qId, score]) => {         const question = internalQuestionMap.get(parseInt(qId, 10));         if (question && question.type !== 'text' && typeof score === 'number' && !isNonScoringAnswer(question, score)) {           if (!categoryScores[question.category]) categoryScores[question.category] = { total: 0 };           categoryScores[question.category].total += getPointValue(question, score);         }       });     });      const categories = Object.entries(categoryScores).map(([name, data]) => ({       name,       total: data.total     }));      return { categories, totalEvaluations: relevant.length };   };
 
-  const getAggregateStats = (questionMap: Map<number, Question>) => {     if (questionMap.size === 0) return null;     const relevant = evaluations.filter(evalu =>       Object.keys(evalu.answers).some(qId => questionMap.has(parseInt(qId, 10)))     );     if (relevant.length === 0) return null;      const categoryScores: { [key: string]: { total: number } } = {};     relevant.forEach(evalu => {       Object.entries(evalu.answers).forEach(([qId, score]) => {         const question = questionMap.get(parseInt(qId, 10));         if (question && question.type !== 'text' && typeof score === 'number') {           if (!categoryScores[question.category]) categoryScores[question.category] = { total: 0 };           categoryScores[question.category].total += getPointValue(question, score);         }       });     });      const categories = Object.entries(categoryScores).map(([name, data]) => ({       name,       total: data.total     }));      return { categories, totalEvaluations: relevant.length };   };
+  const getAggregateStats = (questionMap: Map<number, Question>) => {     if (questionMap.size === 0) return null;     const relevant = filteredEvaluations.filter(evalu =>       Object.keys(evalu.answers).some(qId => questionMap.has(parseInt(qId, 10)))     );     if (relevant.length === 0) return null;      const categoryScores: { [key: string]: { total: number } } = {};     relevant.forEach(evalu => {       Object.entries(evalu.answers).forEach(([qId, score]) => {         const question = questionMap.get(parseInt(qId, 10));         if (question && question.type !== 'text' && typeof score === 'number' && !isNonScoringAnswer(question, score)) {           if (!categoryScores[question.category]) categoryScores[question.category] = { total: 0 };           categoryScores[question.category].total += getPointValue(question, score);         }       });     });      const categories = Object.entries(categoryScores).map(([name, data]) => ({       name,       total: data.total     }));      return { categories, totalEvaluations: relevant.length };   };
 
-  const getQuestionStats = (questionMap: Map<number, Question>) => {     if (questionMap.size === 0) return null;     const relevant = evaluations.filter(evalu =>       Object.keys(evalu.answers).some(qId => questionMap.has(parseInt(qId, 10)))     );     if (relevant.length === 0) return null;      const questionScores: { [key: number]: { total: number } } = {};     relevant.forEach(evalu => {       Object.entries(evalu.answers).forEach(([qId, score]) => {         const questionId = parseInt(qId, 10);         const question = questionMap.get(questionId);         if (question && question.type !== 'text' && typeof score === 'number') {           if (!questionScores[questionId]) questionScores[questionId] = { total: 0 };           questionScores[questionId].total += getPointValue(question, score);         }       });     });      const questions = Array.from(questionMap.values())       .map(question => {         const data = questionScores[question.id];         if (!data) return null;         return { name: question.text, total: data.total };       })       .filter(Boolean) as { name: string; total: number }[];      if (questions.length === 0) return null;     return { questions, totalEvaluations: relevant.length };   };
+  const getQuestionStats = (questionMap: Map<number, Question>) => {     if (questionMap.size === 0) return null;     const relevant = filteredEvaluations.filter(evalu =>       Object.keys(evalu.answers).some(qId => questionMap.has(parseInt(qId, 10)))     );     if (relevant.length === 0) return null;      const questionScores: { [key: number]: { total: number } } = {};     relevant.forEach(evalu => {       Object.entries(evalu.answers).forEach(([qId, score]) => {         const questionId = parseInt(qId, 10);         const question = questionMap.get(questionId);         if (question && question.type !== 'text' && typeof score === 'number' && !isNonScoringAnswer(question, score)) {           if (!questionScores[questionId]) questionScores[questionId] = { total: 0 };           questionScores[questionId].total += getPointValue(question, score);         }       });     });      const questions = Array.from(questionMap.values())       .map(question => {         const data = questionScores[question.id];         if (!data) return null;         return { name: question.text, total: data.total };       })       .filter(Boolean) as { name: string; total: number }[];      if (questions.length === 0) return null;     return { questions, totalEvaluations: relevant.length };   };
 
 
   const renderScoreTooltip = () => ({ active, payload, label }: { active?: boolean; payload?: { value?: number }[]; label?: string }) => {     if (!active || !payload || !payload.length) return null;     const rawValue = payload[0]?.value;     if (typeof rawValue !== 'number') return null;     return (       <div className="bg-white border rounded-lg px-3 py-2 text-xs shadow">         <div className="font-semibold text-slate-800">{label}</div>         <div className="text-slate-600">puntos: {rawValue}</div>       </div>     );   };
@@ -180,7 +240,7 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
 
   const getPeerCommentsForEmployee = (empId: string) => {
     const results: string[] = [];
-    evaluations.forEach(evalu => {
+    filteredEvaluations.forEach(evalu => {
       if (evalu.evaluatedId !== empId) return;
       if (!Object.keys(evalu.answers).some(qId => peerQuestionMap.has(parseInt(qId, 10)))) return;
       const commentText = (evalu.comments || '').trim();
@@ -200,7 +260,7 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
 
   const getInternalCommentsForEmployee = (empId: string) => {
     const results: { category: string; text: string }[] = [];
-    evaluations.forEach(evalu => {
+    filteredEvaluations.forEach(evalu => {
       if (evalu.evaluatorId !== empId) return;
       if (!Object.keys(evalu.answers).some(qId => internalQuestionMap.has(parseInt(qId, 10)))) return;
       const commentText = (evalu.comments || '').trim();
@@ -253,7 +313,7 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
     const tagRegex = /^\[\[(.+?)\]\]\s*(.*)$/;
 
     const results: string[] = [];
-    evaluations.forEach((evalu) => {
+    filteredEvaluations.forEach((evalu) => {
       if (!Object.keys(evalu.answers).some(qId => questionIds.has(parseInt(qId, 10)))) return;
       const commentText = (evalu.comments || '').trim();
       if (!commentText) return;
@@ -290,13 +350,13 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
     return results;
   };
 
-  const getQuestionTotalsForCategory = (categoryName: string) => {     if (!categoryName) return [];     const categoryQuestions = internalQuestions.filter(question =>       question.category === categoryName && question.type !== 'text'     );     if (categoryQuestions.length === 0) return [];      const totals = new Map<number, number>();     evaluations.forEach((evaluation) => {       categoryQuestions.forEach((question) => {         const value = evaluation.answers[question.id];         if (typeof value === 'number') {           totals.set(question.id, (totals.get(question.id) || 0) + getPointValue(question, value));         }       });     });      return categoryQuestions.map(question => {       const total = totals.get(question.id);       if (typeof total !== 'number') {         return { id: question.id, text: question.text, total: null };       }       return {         id: question.id,         text: question.text,         total,       };     });   };
+  const getQuestionTotalsForCategory = (categoryName: string) => {     if (!categoryName) return [];     const categoryQuestions = internalQuestions.filter(question =>       question.category === categoryName && question.type !== 'text'     );     if (categoryQuestions.length === 0) return [];      const totals = new Map<number, number>();     filteredEvaluations.forEach((evaluation) => {       categoryQuestions.forEach((question) => {         const value = evaluation.answers[question.id];         if (typeof value === 'number' && !isNonScoringAnswer(question, value)) {           totals.set(question.id, (totals.get(question.id) || 0) + getPointValue(question, value));         }       });     });      return categoryQuestions.map(question => {       const total = totals.get(question.id);       if (typeof total !== 'number') {         return { id: question.id, text: question.text, total: null };       }       return {         id: question.id,         text: question.text,         total,       };     });   };
 
-  const getPeerQuestionTotalsForEmployee = (empId: string) => {     const relevant = evaluations.filter(evaluation => (       evaluation.evaluatedId === empId       && Object.keys(evaluation.answers).some(questionId => peerQuestionIds.has(Number(questionId)))     ));     const totals = new Map<number, number>();      relevant.forEach(evaluation => {       peerQuestions.forEach(question => {         const value = evaluation.answers[question.id];         if (typeof value === 'number') {           totals.set(question.id, (totals.get(question.id) || 0) + getPointValue(question, value));         }       });     });      const totalsByQuestion = peerQuestions.map(question => {       const total = totals.get(question.id);       return typeof total === 'number' ? total : null;     });     const numericTotals = totalsByQuestion.filter((value): value is number => typeof value === 'number');     const totalOverall = numericTotals.length > 0       ? numericTotals.reduce((sum, value) => sum + value, 0)       : null;     return {       hasData: relevant.length > 0 && numericTotals.length > 0,       evaluationsCount: relevant.length,       totals: totalsByQuestion,       totalOverall,     };   };
+  const getPeerQuestionTotalsForEmployee = (empId: string) => {     const relevant = filteredEvaluations.filter(evaluation => (       evaluation.evaluatedId === empId       && Object.keys(evaluation.answers).some(questionId => peerQuestionIds.has(Number(questionId)))     ));     const totals = new Map<number, number>();      relevant.forEach(evaluation => {       peerQuestions.forEach(question => {         const value = evaluation.answers[question.id];         if (typeof value === 'number' && !isNonScoringAnswer(question, value)) {           totals.set(question.id, (totals.get(question.id) || 0) + getPointValue(question, value));         }       });     });      const totalsByQuestion = peerQuestions.map(question => {       const total = totals.get(question.id);       return typeof total === 'number' ? total : null;     });     const numericTotals = totalsByQuestion.filter((value): value is number => typeof value === 'number');     const totalOverall = numericTotals.length > 0       ? numericTotals.reduce((sum, value) => sum + value, 0)       : null;     return {       hasData: relevant.length > 0 && numericTotals.length > 0,       evaluationsCount: relevant.length,       totals: totalsByQuestion,       totalOverall,     };   };
   const handleAIAnalysis = async () => {
     if (!selectedEmp) return;
     setIsAnalyzing(true);
-    const peerEvaluations = evaluations.filter(evalu =>
+    const peerEvaluations = filteredEvaluations.filter(evalu =>
       Object.keys(evalu.answers).some(qId => peerQuestionMap.has(parseInt(qId, 10)))
     );
     const result = await analyzeEvaluations(peerEvaluations, selectedEmp);
@@ -309,7 +369,7 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
     const svg = containerRef.current.querySelector('svg');
     if (!svg) return;
     if (!navigator.clipboard || typeof ClipboardItem === 'undefined') {
-      showAlert('Tu navegador no permite copiar im�genes al portapapeles.');
+      showAlert('Tu navegador no permite copiar imágenes al portapapeles.');
       return;
     }
     const svgData = new XMLSerializer().serializeToString(svg);
@@ -351,6 +411,14 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
     setSelectedInternalCategory(prev => (prev && internalCategories.includes(prev) ? prev : internalCategories[0]));
   }, [internalCategories]);
 
+  useEffect(() => {
+    if (!selectedEmp) return;
+    if (selectedCampus === 'all') return;
+    if (!filteredEmployeeIds.has(selectedEmp.id)) {
+      setSelectedEmp(null);
+    }
+  }, [selectedCampus, selectedEmp, filteredEmployeeIds]);
+
   const stats = selectedEmp ? getStatsForEmployee(selectedEmp.id) : null;
   const internalStats = selectedEmp ? getInternalStats(selectedEmp.id) : null;
   const overallPeerQuestionStats = getQuestionStats(peerQuestionMap);
@@ -360,7 +428,7 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
   const peerCommentsForEmployee = selectedEmp ? getPeerCommentsForEmployee(selectedEmp.id) : [];
   const internalCommentsForEmployee = selectedEmp ? getInternalCommentsForEmployee(selectedEmp.id) : [];
   const peerEvaluationsForSelected = selectedEmp
-    ? evaluations.filter(evalu => (
+    ? filteredEvaluations.filter(evalu => (
       evalu.evaluatedId === selectedEmp.id
       && Object.keys(evalu.answers).some(qId => peerQuestionMap.has(parseInt(qId, 10)))
     ))
@@ -372,7 +440,7 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
   const internalExportEvaluations = filterEvaluationsByQuestions(internalQuestionIds);
   const canExportPeer = peerQuestions.length > 0 && peerExportEvaluations.length > 0;
   const canExportInternal = internalQuestions.length > 0 && internalExportEvaluations.length > 0;
-  const peerTableRows = employees.map(employee => ({
+  const peerTableRows = filteredEmployees.map(employee => ({
     employee,
     ...getPeerQuestionTotalsForEmployee(employee.id),
   }));
@@ -380,7 +448,8 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-2 bg-slate-100 rounded-full p-1 w-fit">
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-2 bg-slate-100 rounded-full p-1 w-fit">
         <button
           onClick={() => setViewMode('employee')}
           className={`px-4 py-2 rounded-full text-xs font-semibold transition-all ${viewMode === 'employee' ? 'bg-[var(--color-primary)] text-white shadow-sm' : 'text-slate-600'}`}
@@ -394,12 +463,27 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
           General
         </button>
       </div>
+        <div className="flex items-center gap-2 text-xs text-slate-500">
+          <label htmlFor="results-campus" className="font-semibold">Colegio</label>
+          <select
+            id="results-campus"
+            value={selectedCampus}
+            onChange={(event) => setSelectedCampus(event.target.value)}
+            className="border border-slate-200 rounded-md bg-white px-3 py-2 text-xs text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30"
+          >
+            <option value="all">Todos los colegios</option>
+            {campusOptions.map(campus => (
+              <option key={campus} value={campus}>{campus}</option>
+            ))}
+          </select>
+        </div>
+      </div>
 
       {viewMode === 'employee' ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-1 bg-white rounded-xl shadow-sm border overflow-hidden">
             <div className="divide-y max-h-[600px] overflow-y-auto">
-              {employees.map(emp => (
+              {filteredEmployees.map(emp => (
                 <button key={emp.id} onClick={() => setSelectedEmp(emp)} className={`w-full p-4 text-left transition-all ${selectedEmp?.id === emp.id ? 'bg-[var(--color-primary-tint)] border-l-4 border-[var(--color-primary)]' : ''}`}>
                   <p className="font-semibold">{emp.name}</p>
                   <p className="text-xs text-slate-500">{emp.role}</p>
@@ -462,7 +546,7 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
                 )}
                 <div className="bg-white p-6 rounded-xl border">
                   <div className="flex justify-between items-center mb-6">
-                    <h3 className="font-bold flex items-center gap-2"><BarChart3 size={20} /> Satisfacci�n interna</h3>
+                    <h3 className="font-bold flex items-center gap-2"><BarChart3 size={20} /> Satisfacción interna</h3>
                     <div className="flex items-center gap-3">
                       <span className="text-xs text-slate-500">{internalStats ? `${internalStats.totalEvaluations} evaluaciones` : 'Sin datos'}</span>
                       {internalStats && (
@@ -490,7 +574,7 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
                     </div>
                   )}
                   <div className="mt-6">
-                    <h4 className="font-semibold text-slate-800 mb-3">Comentarios de satisfacci�n interna</h4>
+                    <h4 className="font-semibold text-slate-800 mb-3">Comentarios de satisfacción interna</h4>
                     {internalCommentsForEmployee.length > 0 ? (
                       <div className="space-y-3">
                         {internalCommentsForEmployee.map((comment, index) => (
@@ -512,7 +596,7 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
                 {stats && (
                   <div className="bg-slate-900 rounded-xl p-6 text-white">
                     <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-xl font-bold flex items-center gap-2"><Sparkles size={24} className="text-[var(--color-primary)]" /> An�lisis IA</h3>
+                      <h3 className="text-xl font-bold flex items-center gap-2"><Sparkles size={24} className="text-[var(--color-primary)]" /> Análisis IA</h3>
                       <button onClick={handleAIAnalysis} disabled={isAnalyzing} className="bg-[var(--color-primary)] px-4 py-2 rounded-lg text-sm font-bold disabled:opacity-50">
                         {isAnalyzing ? 'Analizando...' : 'Analizar'}
                       </button>
@@ -541,7 +625,7 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div>
                 <div className="flex items-center justify-between mb-4">
-                  <h4 className="font-semibold text-slate-800">Desempe�o general</h4>
+                  <h4 className="font-semibold text-slate-800">Desempeño general</h4>
                   <div className="flex items-center gap-3">
                     <span className="text-xs text-slate-500">{overallPeerQuestionStats ? `${overallPeerQuestionStats.totalEvaluations} evaluaciones` : 'Sin datos'}</span>
                     <button
@@ -572,13 +656,13 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
                   </div>
                 ) : (
                   <div className="text-sm text-slate-400 bg-slate-50 border border-dashed rounded-xl p-6 text-center">
-                    No hay evaluaciones de desempe�o registradas.
+                    No hay evaluaciones de desempeño registradas.
                   </div>
                 )}
               </div>
               <div>
                 <div className="flex items-center justify-between mb-4">
-                  <h4 className="font-semibold text-slate-800">Satisfacci�n interna (global)</h4>
+                  <h4 className="font-semibold text-slate-800">Satisfacción interna (global)</h4>
                   <div className="flex items-center gap-3">
                     <span className="text-xs text-slate-500">{overallInternalStats ? `${overallInternalStats.totalEvaluations} evaluaciones` : 'Sin datos'}</span>
                     <button
@@ -672,11 +756,11 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
           <div className="bg-white p-6 rounded-xl border">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
-                <h3 className="font-bold text-slate-800">Comentarios por secci�n</h3>
-                <p className="text-sm text-slate-500">Selecciona una barra en la gr�fica para ver los comentarios registrados.</p>
+                <h3 className="font-bold text-slate-800">Comentarios por sección</h3>
+                <p className="text-sm text-slate-500">Selecciona una barra en la gráfica para ver los comentarios registrados.</p>
               </div>
               <span className="inline-flex items-center px-3 py-2 rounded-full text-sm font-semibold bg-slate-100 text-slate-700">
-                {selectedInternalCategory || 'Sin categoria'}
+                {selectedInternalCategory || 'Sin categoría'}
               </span>
             </div>
             <div className="mt-6 space-y-6">
@@ -696,7 +780,7 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
                     </div>
                   ) : (
                     <div className="mt-3 text-sm text-slate-400 bg-slate-50 border border-dashed rounded-xl p-4 text-center">
-                      No hay preguntas registradas para esta categoria.
+                      No hay preguntas registradas para esta categoría.
                     </div>
                   )}
                 </div>
@@ -710,7 +794,7 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
                   ))
                 ) : (
                   <div className="text-sm text-slate-400 bg-slate-50 border border-dashed rounded-xl p-6 text-center">
-                    {selectedInternalCategory ? 'No hay comentarios para esta categoria.' : 'Selecciona una categoria para ver comentarios.'}
+                    {selectedInternalCategory ? 'No hay comentarios para esta categoría.' : 'Selecciona una categoría para ver comentarios.'}
                   </div>
                 )}
               </div>

@@ -599,7 +599,7 @@ const QuestionsPanel: React.FC<Props> = ({
               </button>
             </div>
             <textarea
-              placeholder="Descripcion (opcional)"
+              placeholder="Descripción (opcional)"
               value={newCategoryDescription}
               onChange={(e) => setNewCategoryDescription(e.target.value)}
               className="w-full px-3 py-2 text-sm border rounded-lg"
@@ -614,7 +614,7 @@ const QuestionsPanel: React.FC<Props> = ({
                   <div key={section.value}>
                     <div className="flex items-center justify-between mb-2">
                       <h4 className="text-sm font-semibold text-slate-700">{section.label}</h4>
-                      <span className="text-xs text-slate-500">{sectionCategories.length} categorias</span>
+                      <span className="text-xs text-slate-500">{sectionCategories.length} categorías</span>
                     </div>
                     <div className="divide-y">
                       {sectionCategories.map(category => {
@@ -641,7 +641,7 @@ const QuestionsPanel: React.FC<Props> = ({
                                 <textarea
                                   value={editCategoryDescription}
                                   onChange={(e) => setEditCategoryDescription(e.target.value)}
-                                  placeholder="Descripcion (opcional)"
+                                  placeholder="Descripción (opcional)"
                                   className="px-3 py-2 text-sm border rounded-lg"
                                   rows={2}
                                 />

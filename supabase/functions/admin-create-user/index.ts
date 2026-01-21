@@ -55,7 +55,7 @@ serve(async (req) => {
     });
   }
 
-  let payload: { email?: string; name?: string; role?: string; group?: string; campus?: string; is_admin?: boolean };
+  let payload: { email?: string; name?: string; role?: string; group?: string; campus?: string; is_admin?: boolean; access_role?: string };
   try {
     payload = await req.json();
   } catch {
@@ -71,6 +71,8 @@ serve(async (req) => {
   const groupName = (payload.group ?? "").trim();
   const campus = (payload.campus ?? "").trim();
   const isAdmin = Boolean(payload.is_admin);
+  const accessRoleInput = (payload.access_role ?? "").trim().toLowerCase();
+  const accessRole = accessRoleInput === "viewer" ? "viewer" : "educator";
 
   if (!email || !name || !role) {
     return new Response(JSON.stringify({ error: "Missing required fields." }), {
@@ -105,11 +107,12 @@ serve(async (req) => {
     group_name: groupName || null,
     campus: campus || null,
     is_admin: isAdmin,
+    access_role: accessRole,
   });
 
   return new Response(
     JSON.stringify({
-      profile: { id: userId, email, name, role, group_name: groupName || null, campus: campus || null, is_admin: isAdmin },
+      profile: { id: userId, email, name, role, group_name: groupName || null, campus: campus || null, is_admin: isAdmin, access_role: accessRole },
     }),
     { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
   );

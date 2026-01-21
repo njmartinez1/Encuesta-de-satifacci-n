@@ -13,13 +13,43 @@ interface Props {
   questions: Question[];
   sectionTitle?: string;
   sectionDescription?: string;
+  initialAnswers?: { [key: number]: number | string };
+  initialComments?: string;
   onSave: (evaluation: Evaluation) => Promise<boolean>;
 }
 
-const EvaluationForm: React.FC<Props> = ({ evaluatorId, targetEmployee, questions, sectionTitle, sectionDescription, onSave }) => {
+const normalizeOptionLabel = (value: string) => value
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .trim()
+  .toLowerCase();
+
+const NON_SCORING_OPTION_LABELS = [
+  'no uso la plataforma',
+  'no he presentado solicitudes de reembolso',
+];
+const isNonScoringOptionLabel = (label: string) =>
+  NON_SCORING_OPTION_LABELS.some(term => normalizeOptionLabel(label).includes(term));
+
+const EvaluationForm: React.FC<Props> = ({ evaluatorId, targetEmployee, questions, sectionTitle, sectionDescription, initialAnswers, initialComments, onSave }) => {
   const { showAlert } = useModal();
-  const [answers, setAnswers] = useState<{ [key: number]: number | string }>({});
-  const [comments, setComments] = useState('');
+  const buildInitialAnswers = () => {
+    if (!initialAnswers) return {};
+    const mapped: { [key: number]: number | string } = { ...initialAnswers };
+    questions.forEach((question) => {
+      if (question.type === 'text') return;
+      if (!question.options || question.options.length === 0) return;
+      const noUseIndex = question.options.findIndex(option => isNonScoringOptionLabel(option));
+      if (noUseIndex < 0) return;
+      const noUseScore = getScaleScore(noUseIndex, question.options.length);
+      if (mapped[question.id] === noUseScore) {
+        mapped[question.id] = question.options[noUseIndex];
+      }
+    });
+    return mapped;
+  };
+  const [answers, setAnswers] = useState<{ [key: number]: number | string }>(() => buildInitialAnswers());
+  const [comments, setComments] = useState(() => initialComments ?? '');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleAnswerChange = (questionId: number, value: number | string) => {
@@ -30,7 +60,8 @@ const EvaluationForm: React.FC<Props> = ({ evaluatorId, targetEmployee, question
     if (question.type === 'text') {
       return typeof value === 'string' && value.trim().length > 0;
     }
-    return typeof value === 'number';
+    if (typeof value === 'number') return true;
+    return typeof value === 'string' && value.trim().length > 0;
   };
   const requiredQuestions = questions.filter(question => question.isRequired);
   const handleSubmit = async (e: React.FormEvent) => {
@@ -136,7 +167,10 @@ const EvaluationForm: React.FC<Props> = ({ evaluatorId, targetEmployee, question
                     style={{ gridTemplateColumns: `repeat(${scaleOptions.length}, minmax(0, 1fr))` }}
                   >
                     {scaleOptions.map((label, optionIndex) => {
-                      const optionValue = getScaleScore(optionIndex, scaleOptions.length);
+                      const isNonScoringOption = isNonScoringOptionLabel(label);
+                      const optionValue = isNonScoringOption
+                        ? label
+                        : getScaleScore(optionIndex, scaleOptions.length);
                       const isSelected = answers[q.id] === optionValue;
                       return (
                         <button
