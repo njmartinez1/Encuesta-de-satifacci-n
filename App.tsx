@@ -98,6 +98,11 @@ type ThemePalette = {
   primarySoft: string;
   primaryTint: string;
   primaryBorder: string;
+  complete: string;
+  completeSoft: string;
+  completeBorder: string;
+  completeBadgeBg: string;
+  completeBadgeBorder: string;
   logo: {
     one: string;
     two: string;
@@ -121,6 +126,11 @@ const DEFAULT_THEME: ThemePalette = {
   primarySoft: '#dbe9f3',
   primaryTint: '#eef5fa',
   primaryBorder: '#c7dceb',
+  complete: '#34d399',
+  completeSoft: '#effbf7',
+  completeBorder: '#d6f6eb',
+  completeBadgeBg: '#d6f6eb',
+  completeBadgeBorder: '#aeedd6',
   logo: DEFAULT_LOGO_COLORS,
 };
 
@@ -173,6 +183,11 @@ const buildThemePalette = (primary: string, useDefaultLogo: boolean): ThemePalet
   primarySoft: mixHex(primary, '#ffffff', 0.7),
   primaryTint: mixHex(primary, '#ffffff', 0.85),
   primaryBorder: mixHex(primary, '#ffffff', 0.55),
+  complete: '#34d399',
+  completeSoft: mixHex('#34d399', '#ffffff', 0.92),
+  completeBorder: mixHex('#34d399', '#ffffff', 0.8),
+  completeBadgeBg: mixHex('#34d399', '#ffffff', 0.8),
+  completeBadgeBorder: mixHex('#34d399', '#ffffff', 0.6),
   logo: buildLogoPalette(primary, useDefaultLogo),
 });
 
@@ -185,10 +200,32 @@ const normalizeCampusName = (value?: string | null) => (value ?? '')
 const getThemeForCampus = (campus?: string | null) => {
   const normalized = normalizeCampusName(campus);
   if (normalized === 'puembo') {
-    return buildThemePalette('#40CCA1', false);
+    const complete = '#40CCA1';
+    const completeSoft = mixHex(complete, '#ffffff', 0.92);
+    const completeBorder = mixHex(complete, '#ffffff', 0.8);
+    const completeBadgeBg = mixHex(complete, '#ffffff', 0.8);
+    const completeBadgeBorder = mixHex(complete, '#ffffff', 0.6);
+    return {
+      ...buildThemePalette('#40CCA1', false),
+      complete,
+      completeSoft,
+      completeBorder,
+      completeBadgeBg,
+      completeBadgeBorder,
+    };
   }
   if (normalized === 'santaclara') {
-    return buildThemePalette('#EA1BBE', false);
+    const primaryBase = '#127EFF';
+    const primary = mixHex(primaryBase, '#ffffff', 0.25);
+    const complete = mixHex(primaryBase, '#ffffff', 0.35);
+    return {
+      ...buildThemePalette(primary, false),
+      complete,
+      completeSoft: mixHex(complete, '#ffffff', 0.92),
+      completeBorder: mixHex(complete, '#ffffff', 0.8),
+      completeBadgeBg: mixHex(complete, '#ffffff', 0.8),
+      completeBadgeBorder: mixHex(complete, '#ffffff', 0.6),
+    };
   }
   return DEFAULT_THEME;
 };
@@ -261,6 +298,11 @@ const App: React.FC = () => {
     '--color-primary-soft': theme.primarySoft,
     '--color-primary-tint': theme.primaryTint,
     '--color-primary-border': theme.primaryBorder,
+    '--color-complete': theme.complete,
+    '--color-complete-soft': theme.completeSoft,
+    '--color-complete-border': theme.completeBorder,
+    '--color-complete-badge': theme.completeBadgeBg,
+    '--color-complete-badge-border': theme.completeBadgeBorder,
     '--logo-1': theme.logo.one,
     '--logo-2': theme.logo.two,
     '--logo-3': theme.logo.three,
@@ -268,6 +310,8 @@ const App: React.FC = () => {
   } as React.CSSProperties;
 
   const logoSrc = getLogoForCampus(currentUser?.campus);
+  const isDefaultLogo = logoSrc === 'logo.svg';
+
 
   useEffect(() => {
     let isMounted = true;
@@ -1016,15 +1060,26 @@ const App: React.FC = () => {
   const questionIdsForCurrentUser = currentUser
     ? evaluatorQuestions[currentUser.id] || questions.map(question => question.id)
     : [];
-    const questionsForCurrentUser = questions.filter(question => questionIdsForCurrentUser.includes(question.id));
+  const questionsForCurrentUser = questions.filter(question => questionIdsForCurrentUser.includes(question.id));
   const peerQuestionsForCurrentUser = questionsForCurrentUser.filter(question => question.section === 'peer');
   const internalQuestionsForCurrentUser = questionsForCurrentUser.filter(question => question.section === 'internal');
   const requiredInternalQuestions = internalQuestionsForCurrentUser.filter(question => question.isRequired);
   const allOptionalInternalQuestions = internalQuestionsForCurrentUser.length > 0 && requiredInternalQuestions.length === 0;
   const allOptionalPeerQuestions = peerQuestionsForCurrentUser.length > 0 && peerQuestionsForCurrentUser.every(question => !question.isRequired);
-  const internalCategories = Array.from(
-    new Set(internalQuestionsForCurrentUser.map(question => question.category))
-  ).sort((a, b) => a.localeCompare(b));
+  const internalCategoryNames = new Set(internalQuestionsForCurrentUser.map(question => question.category));
+  const orderedInternalCategories = categories
+    .filter(cat => cat.section === 'internal' && internalCategoryNames.has(cat.name))
+    .sort((a, b) => {
+      const aOrder = a.sortOrder ?? 0;
+      const bOrder = b.sortOrder ?? 0;
+      if (aOrder !== bOrder) return aOrder - bOrder;
+      return a.name.localeCompare(b.name);
+    })
+    .map(cat => cat.name);
+  const remainingInternalCategories = Array.from(internalCategoryNames)
+    .filter(name => !orderedInternalCategories.includes(name))
+    .sort((a, b) => a.localeCompare(b));
+  const internalCategories = [...orderedInternalCategories, ...remainingInternalCategories];
   const getCategoryDescription = (categoryName: string, section: QuestionSection) => {
     const description = categories.find(cat => cat.section === section && cat.name === categoryName)?.description;
     return description?.trim() || '';
@@ -1046,8 +1101,11 @@ const App: React.FC = () => {
   };
   const internalEvaluationCompleted = Boolean(
     internalEvaluation
-    && requiredInternalQuestions.length > 0
-    && requiredInternalQuestions.every(question => hasAnswer(question, internalEvaluation.answers[question.id]))
+    && (requiredInternalQuestions.length > 0
+      ? requiredInternalQuestions.every(question => hasAnswer(question, internalEvaluation.answers[question.id]))
+      : internalQuestionsForCurrentUser.length > 0
+        && internalQuestionsForCurrentUser.every(question => hasAnswer(question, internalEvaluation.answers[question.id]))
+    )
   );
   const getInternalCategoryStats = (category: string) => {
     const categoryQuestions = internalQuestionsForCurrentUser.filter(question => question.category === category);
@@ -1058,10 +1116,15 @@ const App: React.FC = () => {
     const requiredAnswered = internalEvaluation
       ? requiredCategoryQuestions.filter(question => hasAnswer(question, internalEvaluation.answers[question.id])).length
       : 0;
+    const completed = categoryQuestions.length > 0 && (
+      requiredCategoryQuestions.length > 0
+        ? requiredAnswered === requiredCategoryQuestions.length
+        : answered === categoryQuestions.length
+    );
     return {
       total: categoryQuestions.length,
       answered,
-      completed: requiredCategoryQuestions.length > 0 && requiredAnswered === requiredCategoryQuestions.length,
+      completed,
       allOptional: categoryQuestions.length > 0 && requiredCategoryQuestions.length === 0,
     };
   };
@@ -1096,7 +1159,7 @@ const App: React.FC = () => {
             <img
               src={`${import.meta.env.BASE_URL}${logoSrc}`}
               alt="Encuestas Reinvented"
-              className="mx-auto w-40 h-auto max-w-full object-contain mb-4"
+              className={`mx-auto h-auto max-w-full object-contain mb-4 ${isDefaultLogo ? 'w-28' : 'w-40'}`}
             />
             <h1 className="text-3xl font-bold text-slate-800">Encuestas Reinvented</h1>
             <p className="text-slate-500 mt-2">Ingresa tu correo para recibir un enlace de acceso.</p>
@@ -1253,18 +1316,18 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col" style={themeStyle}>
       <header className="bg-white border-b sticky top-0 z-10 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className="bg-white p-1 rounded-lg">
+            <div className={`bg-white rounded-lg ${isDefaultLogo ? 'p-1' : 'p-2'}`}>
               <img
                 src={`${import.meta.env.BASE_URL}${logoSrc}`}
                 alt="Encuestas Reinvented"
-                className="h-7 w-auto max-w-[160px] object-contain"
+                className={`w-auto object-contain ${isDefaultLogo ? 'h-6 max-w-[69px]' : 'h-10 max-w-[220px]'}`}
               />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-slate-800 hidden sm:block">Encuestas Reinvented</h1>
-              <p className="text-xs text-slate-500">{currentUser.name}</p>
+              <h1 className="text-xl font-bold text-slate-800 hidden sm:block">Encuestas Reinvented</h1>
+              <p className="text-sm text-slate-500">{currentUser.name}</p>
             </div>
           </div>
 
@@ -1319,10 +1382,10 @@ const App: React.FC = () => {
                         setSelectedInternalCategory(null);
                         setSelectedTargetId(null);
                       }}
-                      className={`flex items-center justify-between w-full p-5 rounded-xl border-2 transition-all ${internalEvaluationCompleted ? 'bg-emerald-50 border-emerald-100' : 'bg-white border-slate-100 hover:border-[var(--color-primary-border)] hover:shadow-md'}`}
+                      className={`flex items-center justify-between w-full p-5 rounded-xl border-2 transition-all ${internalEvaluationCompleted ? 'bg-[var(--color-complete-soft)] border-[var(--color-complete-border)]' : 'bg-white border-slate-100 hover:border-[var(--color-primary-border)] hover:shadow-md'}`}
                     >
                       <div className="flex items-center gap-4 text-left">
-                        <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold ${internalEvaluationCompleted ? 'bg-emerald-200 text-emerald-700' : 'bg-[var(--color-primary-soft)] text-[var(--color-primary-dark)]'}`}>
+                        <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold ${internalEvaluationCompleted ? 'bg-[var(--color-complete-badge-border)] text-[var(--color-complete)]' : 'bg-[var(--color-primary-soft)] text-[var(--color-primary-dark)]'}`}>
                           SI
                         </div>
                         <div>
@@ -1331,9 +1394,9 @@ const App: React.FC = () => {
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
-                        {allOptionalInternalQuestions && <span className="text-xs font-bold uppercase text-amber-700 bg-amber-100 px-2 py-1 rounded">Opcional</span>}
-                        {internalEvaluationCompleted && <span className="text-xs font-bold uppercase text-emerald-600 bg-emerald-100 px-2 py-1 rounded">Completado</span>}
-                        <ChevronRight className={internalEvaluationCompleted ? 'text-emerald-400' : 'text-slate-300'} />
+                        {allOptionalInternalQuestions && !internalEvaluationCompleted && <span className="text-xs font-bold uppercase text-amber-700 bg-amber-100 px-2 py-1 rounded">Opcional</span>}
+                        {internalEvaluationCompleted && <span className="text-xs font-bold uppercase text-[var(--color-complete)] bg-[var(--color-complete-badge)] px-2 py-1 rounded">Completado</span>}
+                        <ChevronRight className={internalEvaluationCompleted ? 'text-[var(--color-complete)]' : 'text-slate-300'} />
                       </div>
                     </button>
                   </div>
@@ -1352,8 +1415,12 @@ const App: React.FC = () => {
                     ) : (
                       <>
                         {targetsToEvaluate.map(target => {
-                          const isCompleted = evaluations.some(e => e.evaluatorId === currentUser.id && e.evaluatedId === target.id);
-                          const showCompleted = !allOptionalPeerQuestions && isCompleted;
+                          const evaluation = evaluations.find(e => e.evaluatorId === currentUser.id && e.evaluatedId === target.id);
+                          const isCompleted = Boolean(evaluation);
+                          const allPeerAnswered = evaluation
+                            ? peerQuestionsForCurrentUser.every(question => hasAnswer(question, evaluation.answers[question.id]))
+                            : false;
+                          const showCompleted = isCompleted && (!allOptionalPeerQuestions || allPeerAnswered);
                           return (
                             <button
                               key={target.id}
@@ -1362,10 +1429,10 @@ const App: React.FC = () => {
                                 setSelectedInternalCategory(null);
                                 setSelectedTargetId(target.id);
                               }}
-                              className={`flex items-center justify-between p-5 rounded-xl border-2 transition-all ${showCompleted ? 'bg-emerald-50 border-emerald-100' : 'bg-white border-slate-100 hover:border-[var(--color-primary-border)] hover:shadow-md'}`}
+                              className={`flex items-center justify-between p-5 rounded-xl border-2 transition-all ${showCompleted ? 'bg-[var(--color-complete-soft)] border-[var(--color-complete-border)]' : 'bg-white border-slate-100 hover:border-[var(--color-primary-border)] hover:shadow-md'}`}
                             >
                               <div className="flex items-center gap-4 text-left">
-                                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold ${showCompleted ? 'bg-emerald-200 text-emerald-700' : 'bg-[var(--color-primary-soft)] text-[var(--color-primary-dark)]'}`}>
+                                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold ${showCompleted ? 'bg-[var(--color-complete-badge-border)] text-[var(--color-complete)]' : 'bg-[var(--color-primary-soft)] text-[var(--color-primary-dark)]'}`}>
                                   {target.name.charAt(0)}
                                 </div>
                                 <div>
@@ -1374,9 +1441,9 @@ const App: React.FC = () => {
                                 </div>
                               </div>
                               <div className="flex items-center gap-3">
-                                {allOptionalPeerQuestions && <span className="text-xs font-bold uppercase text-amber-700 bg-amber-100 px-2 py-1 rounded">Opcional</span>}
-                                {showCompleted && <span className="text-xs font-bold uppercase text-emerald-600 bg-emerald-100 px-2 py-1 rounded">Completado</span>}
-                                <ChevronRight className={showCompleted ? 'text-emerald-400' : 'text-slate-300'} />
+                                {allOptionalPeerQuestions && !showCompleted && <span className="text-xs font-bold uppercase text-amber-700 bg-amber-100 px-2 py-1 rounded">Opcional</span>}
+                                {showCompleted && <span className="text-xs font-bold uppercase text-[var(--color-complete)] bg-[var(--color-complete-badge)] px-2 py-1 rounded">Completado</span>}
+                                <ChevronRight className={showCompleted ? 'text-[var(--color-complete)]' : 'text-slate-300'} />
                               </div>
                             </button>
                           );
@@ -1414,16 +1481,16 @@ const App: React.FC = () => {
                         internalCategories.map(category => {
                           const stats = getInternalCategoryStats(category);
                           const badge = category.trim().charAt(0).toUpperCase() || 'I';
-                          const showOptional = stats.allOptional;
-                          const showCompleted = stats.completed && !showOptional;
+                          const showOptional = stats.allOptional && !stats.completed;
+                          const showCompleted = stats.completed;
                           return (
                             <button
                               key={category}
                               onClick={() => setSelectedInternalCategory(category)}
-                              className={`flex items-center justify-between p-5 rounded-xl border-2 transition-all ${showCompleted ? 'bg-emerald-50 border-emerald-100' : 'bg-white border-slate-100 hover:border-[var(--color-primary-border)] hover:shadow-md'}`}
+                              className={`flex items-center justify-between p-5 rounded-xl border-2 transition-all ${showCompleted ? 'bg-[var(--color-complete-soft)] border-[var(--color-complete-border)]' : 'bg-white border-slate-100 hover:border-[var(--color-primary-border)] hover:shadow-md'}`}
                             >
                               <div className="flex items-center gap-4 text-left">
-                                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold ${showCompleted ? 'bg-emerald-200 text-emerald-700' : 'bg-[var(--color-primary-soft)] text-[var(--color-primary-dark)]'}`}>
+                                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold ${showCompleted ? 'bg-[var(--color-complete-badge-border)] text-[var(--color-complete)]' : 'bg-[var(--color-primary-soft)] text-[var(--color-primary-dark)]'}`}>
                                   {badge}
                                 </div>
                                 <div>
@@ -1433,8 +1500,8 @@ const App: React.FC = () => {
                               </div>
                               <div className="flex items-center gap-3">
                                 {showOptional && <span className="text-xs font-bold uppercase text-amber-700 bg-amber-100 px-2 py-1 rounded">Opcional</span>}
-                                {showCompleted && <span className="text-xs font-bold uppercase text-emerald-600 bg-emerald-100 px-2 py-1 rounded">Completado</span>}
-                                <ChevronRight className={showCompleted ? 'text-emerald-400' : 'text-slate-300'} />
+                                {showCompleted && <span className="text-xs font-bold uppercase text-[var(--color-complete)] bg-[var(--color-complete-badge)] px-2 py-1 rounded">Completado</span>}
+                                <ChevronRight className={showCompleted ? 'text-[var(--color-complete)]' : 'text-slate-300'} />
                               </div>
                             </button>
                           );

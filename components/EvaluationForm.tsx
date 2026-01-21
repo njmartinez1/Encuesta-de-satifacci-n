@@ -91,8 +91,8 @@ const EvaluationForm: React.FC<Props> = ({ evaluatorId, targetEmployee, question
             <span className="text-3xl font-bold">{progress}%</span>
           </div>
         </div>
-        <div className="w-full bg-[var(--color-primary-darker)] rounded-full h-2">
-          <div className="bg-emerald-400 h-2 rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
+        <div className="w-full bg-[var(--color-primary)] rounded-full h-2">
+          <div className="bg-white h-2 rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
         </div>
       </div>
 
