@@ -757,7 +757,7 @@ const App: React.FC = () => {
   const handleSaveEvaluation = async (evalData: Evaluation) => {
     const periodId = activePeriod?.id;
     if (!periodId) {
-      showAlert('No hay un período de evaluación activo.');
+      showAlert('No hay un periodo de evaluación activo.');
       return false;
     }
     const existingEvaluation = evaluations.find(
@@ -1209,7 +1209,7 @@ const App: React.FC = () => {
     ? ''
     : surveyDaysRemaining <= 1
       ? 'Hoy es el ultimo dia para realizar encuestas.'
-      : `Quedan ${surveyDaysRemaining} días antes de que se cierre el período de encuestas.`;
+      : `Quedan ${surveyDaysRemaining} días antes de que se cierre el periodo de encuestas.`;
   const isLastSurveyDay = surveyDaysRemaining === 1;
   const surveyEvaluations = activePeriodId
     ? evaluations.filter(e => e.periodId === activePeriodId)
@@ -1546,7 +1546,7 @@ const App: React.FC = () => {
           <div className="space-y-8">
             {!hasActivePeriod ? (
               <div className="text-center py-16 bg-white rounded-xl border text-slate-500">
-                No hay un período de evaluación activo. Contacta al administrador.
+                No hay un periodo de evaluación activo. Contacta al administrador.
               </div>
             ) : !selectedEvaluationSection ? (
               <div className="max-w-3xl mx-auto space-y-8">
@@ -1724,7 +1724,7 @@ const App: React.FC = () => {
               </div>
               <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
                 <label className="text-xs font-semibold text-slate-500">
-                  Período
+                  Periodo
                   <select
                     value={selectedPeriodId}
                     onChange={(event) => setSelectedPeriodId(event.target.value)}
