@@ -155,20 +155,36 @@ serve(async (req) => {
     });
   }
 
-  const { data: allowedData, error: allowedError } = await adminClient
+  const { count: allowedCount, error: countError } = await adminClient
     .from("allowed_emails")
-    .select("email")
-    .eq("email", email)
-    .maybeSingle();
+    .select("*", { count: "exact", head: true });
 
-  if (allowedError) {
+  if (countError) {
     return new Response(JSON.stringify({ error: "Failed to check allowlist." }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 
-  if (!allowedData) {
+  let isAllowed = (allowedCount ?? 0) === 0;
+  if (!isAllowed) {
+    const { data: allowedData, error: allowedError } = await adminClient
+      .from("allowed_emails")
+      .select("email")
+      .ilike("email", email)
+      .maybeSingle();
+
+    if (allowedError) {
+      return new Response(JSON.stringify({ error: "Failed to check allowlist." }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    isAllowed = Boolean(allowedData);
+  }
+
+  if (!isAllowed) {
     return new Response(JSON.stringify({ error: "Tu cuenta no tiene acceso." }), {
       status: 403,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

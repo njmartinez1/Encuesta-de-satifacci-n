@@ -1,10 +1,10 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Assignment, Evaluation, Employee, Question } from '../types.ts';
-import { getScaleScore } from '../scoreUtils.ts';
+import { getScaleRangeFromCount, getScorePercentage, getScaleScore } from '../scoreUtils.ts';
 import { analyzeEvaluations } from '../geminiService.ts';
 import { Sparkles, BarChart3, TrendingUp, Copy, Download } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { useModal } from './ModalProvider.tsx';
 
 interface Props {
@@ -12,9 +12,10 @@ interface Props {
   employees: Employee[];
   questions: Question[];
   assignments: Assignment[];
+  campus?: string | null;
 }
 
-const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, assignments }) => {
+const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, assignments, campus }) => {
   const { showAlert } = useModal();
   const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null);
   const [viewMode, setViewMode] = useState<'employee' | 'general'>('employee');
@@ -214,17 +215,194 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
     );
   };
 
-  const isZeroToTenQuestion = (question: Question) =>     question.text.toLowerCase().includes('en una escala del 0 al 10');    const normalizeZeroToTenValue = (value: number, question: Question) => {     if (question.options && question.options.length === 11) {       return value - 1;     }     if (value > 10) return value - 1;     return value;   };    const getPointValue = (question: Question, score: number) => {     if (isZeroToTenQuestion(question)) {       const normalized = normalizeZeroToTenValue(score, question);       if (normalized >= 9) return 1;       if (normalized >= 7) return 0;       return -1;     }     return score;   }; 
-  const getStatsForEmployee = (empId: string) => {     const relevant = filteredEvaluations.filter(e => {       if (e.evaluatedId !== empId) return false;       return Object.keys(e.answers).some(qId => peerQuestionMap.has(parseInt(qId, 10)));     });     if (relevant.length === 0) return null;      const categoryScores: { [key: string]: { total: number } } = {};     relevant.forEach(evalu => {       Object.entries(evalu.answers).forEach(([qId, score]) => {         const question = peerQuestionMap.get(parseInt(qId, 10));         if (question && question.type !== 'text' && typeof score === 'number' && !isNonScoringAnswer(question, score)) {           if (!categoryScores[question.category]) categoryScores[question.category] = { total: 0 };           categoryScores[question.category].total += getPointValue(question, score);         }       });     });      const categories = Object.entries(categoryScores).map(([name, data]) => ({       name,       total: data.total     }));      return { categories, totalEvaluations: relevant.length };   };
+  const isZeroToTenQuestion = (question: Question) =>
+    question.text.toLowerCase().includes('en una escala del 0 al 10');
+  const normalizeZeroToTenValue = (value: number, question: Question) => {
+    if (question.options && question.options.length === 11) {
+      return value - 1;
+    }
+    if (value > 10) return value - 1;
+    return value;
+  };
+  const getPointValue = (question: Question, score: number) => {
+    if (isZeroToTenQuestion(question)) {
+      const normalized = normalizeZeroToTenValue(score, question);
+      if (normalized >= 9) return 1;
+      if (normalized >= 7) return 0;
+      return -1;
+    }
+    return score;
+  };
+  const getQuestionOptionCount = (question: Question) =>
+    question.options && question.options.length > 0 ? question.options.length : 4;
+  const getPercentageForScore = (question: Question, score: number) => {
+    if (isNonScoringAnswer(question, score)) return null;
+    const value = getPointValue(question, score);
+    const range = isZeroToTenQuestion(question)
+      ? { min: -1, max: 1 }
+      : getScaleRangeFromCount(getQuestionOptionCount(question));
+    return getScorePercentage(value, range.min, range.max);
+  };
+  const getStatsForEmployee = (empId: string) => {
+    const relevant = filteredEvaluations.filter(e => {
+      if (e.evaluatedId !== empId) return false;
+      return Object.keys(e.answers).some(qId => peerQuestionMap.has(parseInt(qId, 10)));
+    });
+    if (relevant.length === 0) return null;
 
-  const getInternalStats = (empId: string) => {     if (internalQuestionMap.size === 0) return null;     const relevant = filteredEvaluations.filter(evalu => {       if (evalu.evaluatedId !== empId) return false;       return Object.keys(evalu.answers).some(qId => internalQuestionMap.has(parseInt(qId, 10)));     });     if (relevant.length === 0) return null;      const categoryScores: { [key: string]: { total: number } } = {};     relevant.forEach(evalu => {       Object.entries(evalu.answers).forEach(([qId, score]) => {         const question = internalQuestionMap.get(parseInt(qId, 10));         if (question && question.type !== 'text' && typeof score === 'number' && !isNonScoringAnswer(question, score)) {           if (!categoryScores[question.category]) categoryScores[question.category] = { total: 0 };           categoryScores[question.category].total += getPointValue(question, score);         }       });     });      const categories = Object.entries(categoryScores).map(([name, data]) => ({       name,       total: data.total     }));      return { categories, totalEvaluations: relevant.length };   };
+    const categoryScores: { [key: string]: { sum: number; count: number } } = {};
+    relevant.forEach(evalu => {
+      Object.entries(evalu.answers).forEach(([qId, score]) => {
+        const question = peerQuestionMap.get(parseInt(qId, 10));
+        if (!question || question.type === 'text' || typeof score !== 'number') return;
+        const percent = getPercentageForScore(question, score);
+        if (typeof percent !== 'number') return;
+        if (!categoryScores[question.category]) categoryScores[question.category] = { sum: 0, count: 0 };
+        categoryScores[question.category].sum += percent;
+        categoryScores[question.category].count += 1;
+      });
+    });
 
-  const getAggregateStats = (questionMap: Map<number, Question>) => {     if (questionMap.size === 0) return null;     const relevant = filteredEvaluations.filter(evalu =>       Object.keys(evalu.answers).some(qId => questionMap.has(parseInt(qId, 10)))     );     if (relevant.length === 0) return null;      const categoryScores: { [key: string]: { total: number } } = {};     relevant.forEach(evalu => {       Object.entries(evalu.answers).forEach(([qId, score]) => {         const question = questionMap.get(parseInt(qId, 10));         if (question && question.type !== 'text' && typeof score === 'number' && !isNonScoringAnswer(question, score)) {           if (!categoryScores[question.category]) categoryScores[question.category] = { total: 0 };           categoryScores[question.category].total += getPointValue(question, score);         }       });     });      const categories = Object.entries(categoryScores).map(([name, data]) => ({       name,       total: data.total     }));      return { categories, totalEvaluations: relevant.length };   };
+    const categories = Object.entries(categoryScores).map(([name, data]) => ({
+      name,
+      percent: data.count > 0 ? Math.round(data.sum / data.count) : 0,
+    }));
 
-  const getQuestionStats = (questionMap: Map<number, Question>) => {     if (questionMap.size === 0) return null;     const relevant = filteredEvaluations.filter(evalu =>       Object.keys(evalu.answers).some(qId => questionMap.has(parseInt(qId, 10)))     );     if (relevant.length === 0) return null;      const questionScores: { [key: number]: { total: number } } = {};     relevant.forEach(evalu => {       Object.entries(evalu.answers).forEach(([qId, score]) => {         const questionId = parseInt(qId, 10);         const question = questionMap.get(questionId);         if (question && question.type !== 'text' && typeof score === 'number' && !isNonScoringAnswer(question, score)) {           if (!questionScores[questionId]) questionScores[questionId] = { total: 0 };           questionScores[questionId].total += getPointValue(question, score);         }       });     });      const questions = Array.from(questionMap.values())       .map(question => {         const data = questionScores[question.id];         if (!data) return null;         return { name: question.text, total: data.total };       })       .filter(Boolean) as { name: string; total: number }[];      if (questions.length === 0) return null;     return { questions, totalEvaluations: relevant.length };   };
+    return { categories, totalEvaluations: relevant.length };
+  };
+
+  const getInternalStats = (empId: string) => {
+    if (internalQuestionMap.size === 0) return null;
+    const relevant = filteredEvaluations.filter(evalu => {
+      if (evalu.evaluatedId !== empId) return false;
+      return Object.keys(evalu.answers).some(qId => internalQuestionMap.has(parseInt(qId, 10)));
+    });
+    if (relevant.length === 0) return null;
+
+    const categoryScores: { [key: string]: { sum: number; count: number } } = {};
+    relevant.forEach(evalu => {
+      Object.entries(evalu.answers).forEach(([qId, score]) => {
+        const question = internalQuestionMap.get(parseInt(qId, 10));
+        if (!question || question.type === 'text' || typeof score !== 'number') return;
+        const percent = getPercentageForScore(question, score);
+        if (typeof percent !== 'number') return;
+        if (!categoryScores[question.category]) categoryScores[question.category] = { sum: 0, count: 0 };
+        categoryScores[question.category].sum += percent;
+        categoryScores[question.category].count += 1;
+      });
+    });
+
+    const categories = Object.entries(categoryScores).map(([name, data]) => ({
+      name,
+      percent: data.count > 0 ? Math.round(data.sum / data.count) : 0,
+    }));
+
+    return { categories, totalEvaluations: relevant.length };
+  };
+
+  const getAggregateStats = (questionMap: Map<number, Question>) => {
+    if (questionMap.size === 0) return null;
+    const relevant = filteredEvaluations.filter(evalu =>
+      Object.keys(evalu.answers).some(qId => questionMap.has(parseInt(qId, 10)))
+    );
+    if (relevant.length === 0) return null;
+
+    const categoryScores: { [key: string]: { sum: number; count: number } } = {};
+    relevant.forEach(evalu => {
+      Object.entries(evalu.answers).forEach(([qId, score]) => {
+        const question = questionMap.get(parseInt(qId, 10));
+        if (!question || question.type === 'text' || typeof score !== 'number') return;
+        const percent = getPercentageForScore(question, score);
+        if (typeof percent !== 'number') return;
+        if (!categoryScores[question.category]) categoryScores[question.category] = { sum: 0, count: 0 };
+        categoryScores[question.category].sum += percent;
+        categoryScores[question.category].count += 1;
+      });
+    });
+
+    const categories = Object.entries(categoryScores).map(([name, data]) => ({
+      name,
+      percent: data.count > 0 ? Math.round(data.sum / data.count) : 0,
+    }));
+
+    return { categories, totalEvaluations: relevant.length };
+  };
+
+  const getQuestionStats = (questionMap: Map<number, Question>) => {
+    if (questionMap.size === 0) return null;
+    const relevant = filteredEvaluations.filter(evalu =>
+      Object.keys(evalu.answers).some(qId => questionMap.has(parseInt(qId, 10)))
+    );
+    if (relevant.length === 0) return null;
+
+    const questionScores: { [key: number]: { sum: number; count: number } } = {};
+    relevant.forEach(evalu => {
+      Object.entries(evalu.answers).forEach(([qId, score]) => {
+        const questionId = parseInt(qId, 10);
+        const question = questionMap.get(questionId);
+        if (!question || question.type === 'text' || typeof score !== 'number') return;
+        const percent = getPercentageForScore(question, score);
+        if (typeof percent !== 'number') return;
+        if (!questionScores[questionId]) questionScores[questionId] = { sum: 0, count: 0 };
+        questionScores[questionId].sum += percent;
+        questionScores[questionId].count += 1;
+      });
+    });
+
+    const questions = Array.from(questionMap.values())
+      .map(question => {
+        const data = questionScores[question.id];
+        if (!data || data.count === 0) return null;
+        return { name: question.text, percent: Math.round(data.sum / data.count) };
+      })
+      .filter(Boolean) as { name: string; percent: number }[];
+
+    if (questions.length === 0) return null;
+    return { questions, totalEvaluations: relevant.length };
+  };
 
 
-  const renderScoreTooltip = () => ({ active, payload, label }: { active?: boolean; payload?: { value?: number }[]; label?: string }) => {     if (!active || !payload || !payload.length) return null;     const rawValue = payload[0]?.value;     if (typeof rawValue !== 'number') return null;     return (       <div className="bg-white border rounded-lg px-3 py-2 text-xs shadow">         <div className="font-semibold text-slate-800">{label}</div>         <div className="text-slate-600">puntos: {rawValue}</div>       </div>     );   };
+  const formatPercent = (value: number) => `${Math.round(value)}%`;
+  const renderScoreTooltip = () => ({
+    active,
+    payload,
+    label,
+  }: {
+    active?: boolean;
+    payload?: { value?: number }[];
+    label?: string;
+  }) => {
+    if (!active || !payload || !payload.length) return null;
+    const rawValue = payload[0]?.value;
+    if (typeof rawValue !== 'number') return null;
+    return (
+      <div className="bg-white border rounded-lg px-3 py-2 text-xs shadow">
+        <div className="font-semibold text-slate-800">{label}</div>
+        <div className="text-slate-600">porcentaje: {formatPercent(rawValue)}</div>
+      </div>
+    );
+  };
+
+  const normalizeCampusName = (value: string | null | undefined) =>
+    (value || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+
+  const PUEMBO_PALETTE = ['#40CCA1', '#2EA884', '#67D8B7', '#1F7A62', '#9AE7D3'];
+  const SANTA_CLARA_PALETTE = ['#4D82BC', '#8AB6F4', '#C4D6FA', '#F8C2DA', '#F7D7EF'];
+  const DEFAULT_PALETTE = ['#34D399', '#60A5FA', '#FBBF24', '#F472B6', '#818CF8', '#F87171'];
+
+  const paletteSource = selectedCampus !== 'all' ? selectedCampus : campus;
+  const normalizedPaletteSource = normalizeCampusName(paletteSource);
+  const activePalette = normalizedPaletteSource.includes('puembo')
+    ? PUEMBO_PALETTE
+    : normalizedPaletteSource.includes('santa clara') || normalizedPaletteSource.includes('santaclara')
+      ? SANTA_CLARA_PALETTE
+      : DEFAULT_PALETTE;
+
+  const getPastelColor = (index: number) => activePalette[index % activePalette.length];
 
   const splitCommentBlocks = (commentText: string) => commentText
     .split(/\n{2,}/)
@@ -519,10 +697,14 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={stats.categories}>
                           <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                          <XAxis dataKey="name" />
-                          <YAxis domain={["auto", "auto"]} />
+                          <XAxis dataKey="name" tick={false} />
+                          <YAxis domain={[0, 100]} tickFormatter={formatPercent} />
                           <Tooltip content={renderScoreTooltip()} />
-                          <Bar dataKey="total" fill="var(--color-primary)" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="percent" radius={[4, 4, 0, 0]}>
+                            {stats.categories.map((_, index) => (
+                              <Cell key={`peer-emp-${index}`} fill={getPastelColor(index)} />
+                            ))}
+                          </Bar>
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
@@ -561,10 +743,14 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={internalStats.categories}>
                           <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                          <XAxis dataKey="name" />
-                          <YAxis domain={["auto", "auto"]} />
+                          <XAxis dataKey="name" tick={false} />
+                          <YAxis domain={[0, 100]} tickFormatter={formatPercent} />
                           <Tooltip content={renderScoreTooltip()} />
-                          <Bar dataKey="total" fill="var(--color-primary)" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="percent" radius={[4, 4, 0, 0]}>
+                            {internalStats.categories.map((_, index) => (
+                              <Cell key={`internal-emp-${index}`} fill={getPastelColor(index)} />
+                            ))}
+                          </Bar>
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
@@ -647,11 +833,15 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={overallPeerQuestionStats.questions}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                      <XAxis dataKey="name" />
-                        <YAxis domain={["auto", "auto"]} />
-                        <Tooltip content={renderScoreTooltip()} />
-                        <Bar dataKey="total" fill="var(--color-primary)" radius={[4, 4, 0, 0]} />
-                      </BarChart>
+                      <XAxis dataKey="name" tick={false} />
+                      <YAxis domain={[0, 100]} tickFormatter={formatPercent} />
+                      <Tooltip content={renderScoreTooltip()} />
+                      <Bar dataKey="percent" radius={[4, 4, 0, 0]}>
+                        {overallPeerQuestionStats.questions.map((_, index) => (
+                          <Cell key={`peer-overall-${index}`} fill={getPastelColor(index)} />
+                        ))}
+                      </Bar>
+                    </BarChart>
                     </ResponsiveContainer>
                   </div>
                 ) : (
@@ -684,18 +874,21 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={overallInternalStats.categories}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                      <XAxis dataKey="name" />
-                      <YAxis domain={["auto", "auto"]} />
+                      <XAxis dataKey="name" tick={false} />
+                      <YAxis domain={[0, 100]} tickFormatter={formatPercent} />
                       <Tooltip content={renderScoreTooltip()} />
                       <Bar
-                        dataKey="total"
-                        fill="var(--color-primary)"
+                        dataKey="percent"
                         radius={[4, 4, 0, 0]}
                         onClick={(data) => {
                           const nextCategory = data?.payload?.name ?? data?.name;
                           if (nextCategory) setSelectedInternalCategory(nextCategory);
                         }}
-                      />
+                      >
+                        {overallInternalStats.categories.map((_, index) => (
+                          <Cell key={`internal-overall-${index}`} fill={getPastelColor(index)} />
+                        ))}
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>

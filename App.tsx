@@ -1260,7 +1260,7 @@ const App: React.FC = () => {
     : { byCategory: new Map<string, string>(), uncategorized: '' };
   const selectedInternalCategoryComment = selectedInternalCategory
     ? internalCommentData.byCategory.get(selectedInternalCategory)
-      ?? (internalCommentData.byCategory.size === 0 ? internalCommentData.uncategorized : '')
+    ?? (internalCommentData.byCategory.size === 0 ? internalCommentData.uncategorized : '')
     : '';
   const evaluationInitialAnswers = activeEvaluation?.answers ?? {};
   const evaluationInitialComments = selectedEvaluationSection === 'internal'
@@ -1285,7 +1285,7 @@ const App: React.FC = () => {
     && (requiredInternalQuestions.length > 0
       ? requiredInternalQuestions.every(question => hasAnswer(question, internalEvaluation.answers[question.id]))
       : internalQuestionsForCurrentUser.length > 0
-        && internalQuestionsForCurrentUser.every(question => hasAnswer(question, internalEvaluation.answers[question.id]))
+      && internalQuestionsForCurrentUser.every(question => hasAnswer(question, internalEvaluation.answers[question.id]))
     )
   );
   const getInternalCategoryStats = (category: string) => {
@@ -1743,7 +1743,13 @@ const App: React.FC = () => {
                 )}
               </div>
             </div>
-            <ResultsDashboard evaluations={resultsEvaluations} employees={employees} questions={questions} assignments={assignments} />
+            <ResultsDashboard
+              evaluations={resultsEvaluations}
+              employees={employees}
+              questions={questions}
+              assignments={assignments}
+              campus={currentUser?.campus ?? null}
+            />
           </div>
         )}
 
@@ -1787,8 +1793,8 @@ const App: React.FC = () => {
             aria-modal="true"
           >
             <h3 className="text-xl font-bold text-slate-800">Anonimato en la encuesta</h3>
-            <p className="mt-3 text-base text-slate-600">
-              Esta encuesta se realizara utilizando tus datos, si quieres que esta encuesta sea anonima hazlo saber seleccionando las opciones que aparecen en pantalla.
+            <p className="mt-3 text-base text-slate-600 text-center">
+              ¿Cómo quieres tratar tus datos en esta encuesta?
             </p>
             <div className="mt-6 flex flex-col sm:flex-row gap-3">
               <button
