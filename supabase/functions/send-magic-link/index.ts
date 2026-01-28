@@ -19,6 +19,7 @@ const clientId = Deno.env.get("M365_CLIENT_ID") ?? "";
 const clientSecret = Deno.env.get("M365_CLIENT_SECRET") ?? "";
 const senderEmail = Deno.env.get("M365_SENDER_EMAIL") ?? "";
 const senderName = Deno.env.get("M365_SENDER_NAME") ?? "Encuestas Reinvented";
+const appSiteUrl = Deno.env.get("APP_SITE_URL") ?? Deno.env.get("SITE_URL") ?? "";
 const missingM365Config = [
   ["M365_TENANT_ID", tenantId],
   ["M365_CLIENT_ID", clientId],
@@ -146,7 +147,20 @@ serve(async (req) => {
   }
 
   const email = (payload.email ?? "").trim().toLowerCase();
-  const redirectTo = (payload.redirectTo ?? "").trim();
+  const rawRedirectTo = (payload.redirectTo ?? "").trim();
+  const sanitizeRedirect = (value: string) => {
+    if (!value) return value;
+    try {
+      const url = new URL(value);
+      if (url.hostname === "localhost" || url.hostname === "127.0.0.1") {
+        return "";
+      }
+    } catch {
+      return "";
+    }
+    return value;
+  };
+  const redirectTo = appSiteUrl || sanitizeRedirect(rawRedirectTo);
 
   if (!email) {
     return new Response(JSON.stringify({ error: "Missing email." }), {
