@@ -44,8 +44,8 @@ type PeriodRow = {
 type SectionOrderRow = { section: string | null; sort_order: number | null };
 
 const DEFAULT_SECTION_OPTIONS: QuestionSectionOption[] = [
-  { value: 'peer', label: 'Evaluaci贸n de pares' },
-  { value: 'internal', label: 'Satisfacci贸n interna' },
+  { value: 'peer', label: 'Evaluaci髇 de pares' },
+  { value: 'internal', label: 'Satisfacci髇 interna' },
 ];
 const OPTIONAL_CATEGORIES = new Set(['alimentacion', 'enfermeria', 'seguros']);
 const normalizeCategoryName = (value: string) => value
@@ -306,7 +306,7 @@ const App: React.FC = () => {
   const [emailInput, setEmailInput] = useState('');
   const [isSendingLink, setIsSendingLink] = useState(false);
   const [linkSent, setLinkSent] = useState(false);
-  const [loginMode, setLoginMode] = useState<'link' | 'password'>('password');
+  const [loginMode, setLoginMode] = useState<'link' | 'password'>('link');
   const [passwordInput, setPasswordInput] = useState('');
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [newPassword, setNewPassword] = useState('');
@@ -600,7 +600,7 @@ const App: React.FC = () => {
     setAuthError(null);
     setLinkSent(false);
     if (!emailInput.trim() || !passwordInput) {
-      setAuthError('Ingresa correo y contrase帽a.');
+      setAuthError('Ingresa correo y contrase馻.');
       return;
     }
     setIsSigningIn(true);
@@ -610,7 +610,7 @@ const App: React.FC = () => {
     });
     setIsSigningIn(false);
     if (error) {
-      setAuthError('No se pudo iniciar sesi贸n.');
+      setAuthError('No se pudo iniciar sesi髇.');
     }
   };
 
@@ -618,11 +618,11 @@ const App: React.FC = () => {
     event.preventDefault();
     setPasswordError(null);
     if (newPassword.length < 6) {
-      setPasswordError('La contrase帽a debe tener al menos 6 caracteres.');
+      setPasswordError('La contrase馻 debe tener al menos 6 caracteres.');
       return;
     }
     if (newPassword !== confirmPassword) {
-      setPasswordError('Las contrase帽as no coinciden.');
+      setPasswordError('Las contrase馻s no coinciden.');
       return;
     }
     setIsUpdatingPassword(true);
@@ -633,7 +633,7 @@ const App: React.FC = () => {
     });
     setIsUpdatingPassword(false);
     if (error) {
-      setPasswordError('No se pudo actualizar la contrase帽a.');
+      setPasswordError('No se pudo actualizar la contrase馻.');
       return;
     }
     setNewPassword('');
@@ -757,7 +757,7 @@ const App: React.FC = () => {
   const handleSaveEvaluation = async (evalData: Evaluation) => {
     const periodId = activePeriod?.id;
     if (!periodId) {
-      showAlert('No hay un periodo de evaluaci贸n activo.');
+      showAlert('No hay un periodo de evaluaci髇 activo.');
       return false;
     }
     const existingEvaluation = evaluations.find(
@@ -803,7 +803,7 @@ const App: React.FC = () => {
       );
 
     if (error) {
-      showAlert('No se pudo guardar la evaluaci贸n.');
+      showAlert('No se pudo guardar la evaluaci髇.');
       return false;
     }
 
@@ -1045,7 +1045,7 @@ const App: React.FC = () => {
       sort_order: nextSortOrder,
     });
     if (error) {
-      showAlert('No se pudo crear la categor铆a.');
+      showAlert('No se pudo crear la categor韆.');
       return;
     }
     setCategories(prev => [...prev, { name, section, sortOrder: nextSortOrder, description: trimmedDescription || '' }]);
@@ -1054,7 +1054,7 @@ const App: React.FC = () => {
     const trimmedDescription = description?.trim();
     const { error } = await supabase.from('question_categories').update({ name: nextName, description: trimmedDescription || null }).eq('name', prevName);
     if (error) {
-      showAlert('No se pudo actualizar la categor铆a.');
+      showAlert('No se pudo actualizar la categor韆.');
       return;
     }
     setCategories(prev => prev.map(cat => (cat.name === prevName ? { ...cat, name: nextName, description: trimmedDescription || '' } : cat)));
@@ -1069,7 +1069,7 @@ const App: React.FC = () => {
     }
     const { error: deleteError } = await supabase.from('question_categories').delete().eq('name', name);
     if (deleteError) {
-      showAlert('No se pudo eliminar la categor铆a.');
+      showAlert('No se pudo eliminar la categor韆.');
       return;
     }
     setCategories(prev => prev.filter(cat => cat.name !== name));
@@ -1086,7 +1086,7 @@ const App: React.FC = () => {
       .from('question_categories')
       .upsert(rows, { onConflict: 'name' });
     if (error) {
-      showAlert('No se pudo actualizar el orden de categor铆as.');
+      showAlert('No se pudo actualizar el orden de categor韆s.');
       return;
     }
     const orderMap = new Map(orderedNames.map((name, index) => [name, index]));
@@ -1100,7 +1100,7 @@ const App: React.FC = () => {
     const { data: sessionData } = await supabase.auth.getSession();
     const accessToken = sessionData.session?.access_token;
     if (!accessToken || !supabaseUrl || !supabaseAnonKey) {
-      throw new Error('Sesi贸n no v谩lida.');
+      throw new Error('Sesi髇 no v醠ida.');
     }
 
     const response = await fetch(`${supabaseUrl}/functions/v1/admin-create-user`, {
@@ -1138,7 +1138,7 @@ const App: React.FC = () => {
     const { data: sessionData } = await supabase.auth.getSession();
     const accessToken = sessionData.session?.access_token;
     if (!accessToken || !supabaseUrl || !supabaseAnonKey) {
-      throw new Error('Sesi贸n no v谩lida.');
+      throw new Error('Sesi髇 no v醠ida.');
     }
 
     const response = await fetch(`${supabaseUrl}/functions/v1/admin-reset-password`, {
@@ -1155,7 +1155,7 @@ const App: React.FC = () => {
     });
     if (!response.ok) {
       const data = await response.json().catch(() => null);
-      throw new Error(data?.error || 'No se pudo restablecer la contrase帽a.');
+      throw new Error(data?.error || 'No se pudo restablecer la contrase馻.');
     }
 
   };
@@ -1209,7 +1209,7 @@ const App: React.FC = () => {
     ? ''
     : surveyDaysRemaining <= 1
       ? 'Hoy es el ultimo dia para realizar encuestas.'
-      : `Quedan ${surveyDaysRemaining} d铆as antes de que se cierre el periodo de encuestas.`;
+      : `Quedan ${surveyDaysRemaining} d韆s antes de que se cierre el periodo de encuestas.`;
   const isLastSurveyDay = surveyDaysRemaining === 1;
   const surveyEvaluations = activePeriodId
     ? evaluations.filter(e => e.periodId === activePeriodId)
@@ -1319,7 +1319,7 @@ const App: React.FC = () => {
     { id: 'survey', label: 'Encuestas', icon: ClipboardList, show: canViewSurvey },
     { id: 'results', label: 'Resultados', icon: LayoutDashboard, show: canViewResults },
     { id: 'questions', label: 'Preguntas', icon: HelpCircle, show: isAdmin },
-    { id: 'admin', label: 'Administraci贸n', icon: Settings, show: isAdmin },
+    { id: 'admin', label: 'Administraci髇', icon: Settings, show: isAdmin },
   ].filter(tab => tab.show);
 
   const mustChangePassword = false;
@@ -1350,22 +1350,6 @@ const App: React.FC = () => {
               {authError}
             </div>
           )}
-          <div className="grid grid-cols-2 gap-2 mb-4">
-            <button
-              type="button"
-              onClick={() => { setLoginMode('link'); setAuthError(null); setLinkSent(false); }}
-              className={`py-2 rounded-lg text-sm font-semibold ${loginMode === 'link' ? 'bg-[var(--color-primary)] text-white' : 'bg-slate-100 text-slate-600'}`}
-            >
-              Enlace
-            </button>
-            <button
-              type="button"
-              onClick={() => { setLoginMode('password'); setAuthError(null); setLinkSent(false); }}
-              className={`py-2 rounded-lg text-sm font-semibold ${loginMode === 'password' ? 'bg-[var(--color-primary)] text-white' : 'bg-slate-100 text-slate-600'}`}
-            >
-              Contrase帽a
-            </button>
-          </div>
           {loginMode === 'link' && linkSent ? (
             <div className="space-y-3">
               <div className="text-sm text-emerald-600 bg-emerald-50 border border-emerald-100 p-3 rounded-lg">
@@ -1412,7 +1396,7 @@ const App: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="text-xs font-semibold text-slate-600">Contrase帽a</label>
+                <label className="text-xs font-semibold text-slate-600">Contrase馻</label>
                 <input
                   type="password"
                   value={passwordInput}
@@ -1448,8 +1432,8 @@ const App: React.FC = () => {
       <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50" style={themeStyle}>
         <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
           <div className="text-center mb-6">
-            <h1 className="text-2xl font-bold text-slate-800">Actualiza tu contrase帽a</h1>
-            <p className="text-slate-500 mt-2">Debes cambiar la contrase帽a inicial para continuar.</p>
+            <h1 className="text-2xl font-bold text-slate-800">Actualiza tu contrase馻</h1>
+            <p className="text-slate-500 mt-2">Debes cambiar la contrase馻 inicial para continuar.</p>
           </div>
           {passwordError && (
             <div className="text-sm text-red-600 bg-red-50 border border-red-100 p-3 rounded-lg mb-4">
@@ -1458,7 +1442,7 @@ const App: React.FC = () => {
           )}
           <form onSubmit={handleUpdatePassword} className="space-y-4">
             <div>
-              <label className="text-xs font-semibold text-slate-600">Nueva contrase帽a</label>
+              <label className="text-xs font-semibold text-slate-600">Nueva contrase馻</label>
               <input
                 type="password"
                 value={newPassword}
@@ -1467,7 +1451,7 @@ const App: React.FC = () => {
               />
             </div>
             <div>
-              <label className="text-xs font-semibold text-slate-600">Confirmar contrase帽a</label>
+              <label className="text-xs font-semibold text-slate-600">Confirmar contrase馻</label>
               <input
                 type="password"
                 value={confirmPassword}
@@ -1480,14 +1464,14 @@ const App: React.FC = () => {
               disabled={isUpdatingPassword}
               className="w-full bg-[var(--color-primary)] hover:bg-[var(--color-primary-dark)] text-white px-4 py-3 rounded-lg font-semibold disabled:opacity-60"
             >
-              {isUpdatingPassword ? 'Actualizando...' : 'Actualizar contrase帽a'}
+              {isUpdatingPassword ? 'Actualizando...' : 'Actualizar contrase馻'}
             </button>
           </form>
           <button
             onClick={handleLogout}
             className="w-full mt-4 text-sm text-slate-500 hover:text-slate-700"
           >
-            Cerrar sesi贸n
+            Cerrar sesi髇
           </button>
         </div>
       </div>
@@ -1529,7 +1513,7 @@ const App: React.FC = () => {
                 );
               })}
             </div>
-            <button onClick={handleLogout} className="p-2 text-slate-400 hover:text-red-600 hover:bg-slate-100 rounded-full transition-colors" aria-label="Cerrar sesi贸n">
+            <button onClick={handleLogout} className="p-2 text-slate-400 hover:text-red-600 hover:bg-slate-100 rounded-full transition-colors" aria-label="Cerrar sesi髇">
               <LogOut size={20} />
             </button>
           </nav>
@@ -1546,7 +1530,7 @@ const App: React.FC = () => {
           <div className="space-y-8">
             {!hasActivePeriod ? (
               <div className="text-center py-16 bg-white rounded-xl border text-slate-500">
-                No hay un periodo de evaluaci贸n activo. Contacta al administrador.
+                No hay un periodo de evaluaci髇 activo. Contacta al administrador.
               </div>
             ) : !selectedEvaluationSection ? (
               <div className="max-w-3xl mx-auto space-y-8">
@@ -1557,14 +1541,14 @@ const App: React.FC = () => {
                     </div>
                   )}
                   <h2 className="text-2xl font-bold text-slate-800">Tus evaluaciones pendientes</h2>
-                  <p className="text-slate-500">Selecciona la secci贸n que deseas completar.</p>
+                  <p className="text-slate-500">Selecciona la secci髇 que deseas completar.</p>
                 </div>
 
                 {internalQuestionsForCurrentUser.length > 0 && (
                   <div>
                     <div className="mb-4">
-                      <h3 className="text-lg font-semibold text-slate-800">Satisfacci贸n interna</h3>
-                      <p className="text-sm text-slate-500">Eval煤a la instituci贸n y las condiciones internas.</p>
+                      <h3 className="text-lg font-semibold text-slate-800">Satisfacci髇 interna</h3>
+                      <p className="text-sm text-slate-500">Eval鷄 la instituci髇 y las condiciones internas.</p>
                     </div>
                     <button
                       onClick={handleStartInternalSurvey}
@@ -1575,7 +1559,7 @@ const App: React.FC = () => {
                           SI
                         </div>
                         <div>
-                          <h4 className="font-semibold text-slate-800">Satisfacci贸n interna</h4>
+                          <h4 className="font-semibold text-slate-800">Satisfacci髇 interna</h4>
                           <p className="text-sm text-slate-500">Encuesta institucional</p>
                         </div>
                       </div>
@@ -1590,13 +1574,13 @@ const App: React.FC = () => {
 
                 <div>
                   <div className="mb-4">
-                    <h3 className="text-lg font-semibold text-slate-800">Evaluaci贸n de pares</h3>
+                    <h3 className="text-lg font-semibold text-slate-800">Evaluaci髇 de pares</h3>
                     <p className="text-sm text-slate-500">Companeros asignados para calificar.</p>
                   </div>
                   <div className="grid gap-4">
                     {peerQuestionsForCurrentUser.length === 0 ? (
                       <div className="text-center py-12 bg-white rounded-xl border text-slate-400">
-                        No hay preguntas para evaluaci贸n de pares configuradas.
+                        No hay preguntas para evaluaci髇 de pares configuradas.
                       </div>
                     ) : (
                       <>
@@ -1655,13 +1639,13 @@ const App: React.FC = () => {
                 {selectedEvaluationSection === 'internal' && !selectedInternalCategory ? (
                   <div className="space-y-4">
                     <div>
-                      <h3 className="text-lg font-semibold text-slate-800">Categor铆as de satisfacci贸n interna</h3>
+                      <h3 className="text-lg font-semibold text-slate-800">Categor韆s de satisfacci髇 interna</h3>
                       <p className="text-sm text-slate-500">Selecciona el area que deseas evaluar.</p>
                     </div>
                     <div className="grid gap-4">
                       {internalCategories.length === 0 ? (
                         <div className="text-center py-12 bg-white rounded-xl border text-slate-400">
-                          No hay categor铆as configuradas para satisfacci贸n interna.
+                          No hay categor韆s configuradas para satisfacci髇 interna.
                         </div>
                       ) : (
                         internalCategories.map(category => {
@@ -1700,7 +1684,7 @@ const App: React.FC = () => {
                     key={evaluationFormKey}
                     evaluatorId={currentUser.id}
                     targetEmployee={selectedEvaluationSection === 'internal'
-                      ? { ...currentUser, name: 'Instituci贸n', role: `Satisfacci贸n interna${selectedInternalCategory ? ` - ${selectedInternalCategory}` : ''}` }
+                      ? { ...currentUser, name: 'Instituci髇', role: `Satisfacci髇 interna${selectedInternalCategory ? ` - ${selectedInternalCategory}` : ''}` }
                       : employees.find(e => e.id === selectedTargetId)!}
                     questions={selectedEvaluationSection === 'internal' ? internalQuestionsForSelectedCategory : peerQuestionsForCurrentUser}
                     sectionTitle={selectedEvaluationSection === 'internal' ? selectedInternalCategory ?? undefined : undefined}
@@ -1720,7 +1704,7 @@ const App: React.FC = () => {
             <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
               <div>
                 <h2 className="text-2xl font-bold text-slate-800">Panel de resultados</h2>
-                <p className="text-slate-500">Estad铆sticas y an谩lisis de desempe帽o.</p>
+                <p className="text-slate-500">Estad韘ticas y an醠isis de desempe駉.</p>
               </div>
               <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
                 <label className="text-xs font-semibold text-slate-500">
@@ -1794,7 +1778,7 @@ const App: React.FC = () => {
           >
             <h3 className="text-xl font-bold text-slate-800">Anonimato en la encuesta</h3>
             <p className="mt-3 text-base text-slate-600 text-center">
-              驴C贸mo quieres tratar tus datos en esta encuesta?
+              緾髆o quieres tratar tus datos en esta encuesta?
             </p>
             <div className="mt-6 flex flex-col sm:flex-row gap-3">
               <button
@@ -1820,3 +1804,7 @@ const App: React.FC = () => {
 };
 
 export default App;
+
+
+
+
