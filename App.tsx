@@ -656,6 +656,7 @@ const App: React.FC = () => {
       setAuthError('Configuracion de Supabase incompleta.');
       return;
     }
+    const redirectTo = import.meta.env.VITE_SITE_URL || window.location.origin;
     const response = await fetch(`${supabaseUrl}/functions/v1/send-magic-link`, {
       method: 'POST',
       headers: {
@@ -664,7 +665,7 @@ const App: React.FC = () => {
       },
       body: JSON.stringify({
         email: emailInput.trim(),
-        redirectTo: window.location.origin,
+        redirectTo,
       }),
     });
     const data = await response.json().catch(() => null);
@@ -1804,6 +1805,9 @@ const App: React.FC = () => {
 };
 
 export default App;
+
+
+
 
 
 
