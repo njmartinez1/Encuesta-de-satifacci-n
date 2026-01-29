@@ -767,7 +767,7 @@ const App: React.FC = () => {
         && evaluation.periodId === periodId
     );
     if (selectedEvaluationSection === 'internal' && internalAnonymityChoice === null && !existingEvaluation) {
-      showAlert('Selecciona si deseas que la encuesta sea anonima antes de continuar.');
+      showAlert('Selecciona si deseas que la encuesta sea anónima antes de continuar.');
       return false;
     }
     const shouldMerge = selectedEvaluationSection === 'internal' && existingEvaluation;
@@ -1576,7 +1576,7 @@ const App: React.FC = () => {
                 <div>
                   <div className="mb-4">
                     <h3 className="text-lg font-semibold text-slate-800">Evaluación de pares</h3>
-                    <p className="text-sm text-slate-500">Companeros asignados para calificar.</p>
+                    <p className="text-sm text-slate-500">Compañeros asignados para calificar.</p>
                   </div>
                   <div className="grid gap-4">
                     {peerQuestionsForCurrentUser.length === 0 ? (
@@ -1787,7 +1787,7 @@ const App: React.FC = () => {
                 onClick={() => handleInternalAnonymityChoice(true)}
                 className="flex-1 bg-[var(--color-primary)] hover:bg-[var(--color-primary-dark)] text-white px-4 py-3 rounded-lg font-semibold"
               >
-                Quiero que sea anonima
+                Quiero que sea anónima
               </button>
               <button
                 type="button"

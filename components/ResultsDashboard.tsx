@@ -251,22 +251,21 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
     });
     if (relevant.length === 0) return null;
 
-    const categoryScores: { [key: string]: { sum: number; count: number } } = {};
+    const categoryScores: { [key: string]: { total: number; max: number } } = {};
     relevant.forEach(evalu => {
       Object.entries(evalu.answers).forEach(([qId, score]) => {
-        const question = peerQuestionMap.get(parseInt(qId, 10));
+        const question = questionMap.get(parseInt(qId, 10));
         if (!question || question.type === 'text' || typeof score !== 'number') return;
-        const percent = getPercentageForScore(question, score);
-        if (typeof percent !== 'number') return;
-        if (!categoryScores[question.category]) categoryScores[question.category] = { sum: 0, count: 0 };
-        categoryScores[question.category].sum += percent;
-        categoryScores[question.category].count += 1;
+        if (isNonScoringAnswer(question, score)) return;
+        if (!categoryScores[question.category]) categoryScores[question.category] = { total: 0, max: 0 };
+        categoryScores[question.category].total += getPointValue(question, score);
+        categoryScores[question.category].max += 1;
       });
     });
 
     const categories = Object.entries(categoryScores).map(([name, data]) => ({
       name,
-      percent: data.count > 0 ? Math.round(data.sum / data.count) : 0,
+      percent: data.max > 0 ? Math.round(Math.min(100, Math.max(0, (data.total / data.max) * 100))) : 0,
     }));
 
     return { categories, totalEvaluations: relevant.length };
@@ -280,22 +279,21 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
     });
     if (relevant.length === 0) return null;
 
-    const categoryScores: { [key: string]: { sum: number; count: number } } = {};
+    const categoryScores: { [key: string]: { total: number; max: number } } = {};
     relevant.forEach(evalu => {
       Object.entries(evalu.answers).forEach(([qId, score]) => {
-        const question = internalQuestionMap.get(parseInt(qId, 10));
+        const question = questionMap.get(parseInt(qId, 10));
         if (!question || question.type === 'text' || typeof score !== 'number') return;
-        const percent = getPercentageForScore(question, score);
-        if (typeof percent !== 'number') return;
-        if (!categoryScores[question.category]) categoryScores[question.category] = { sum: 0, count: 0 };
-        categoryScores[question.category].sum += percent;
-        categoryScores[question.category].count += 1;
+        if (isNonScoringAnswer(question, score)) return;
+        if (!categoryScores[question.category]) categoryScores[question.category] = { total: 0, max: 0 };
+        categoryScores[question.category].total += getPointValue(question, score);
+        categoryScores[question.category].max += 1;
       });
     });
 
     const categories = Object.entries(categoryScores).map(([name, data]) => ({
       name,
-      percent: data.count > 0 ? Math.round(data.sum / data.count) : 0,
+      percent: data.max > 0 ? Math.round(Math.min(100, Math.max(0, (data.total / data.max) * 100))) : 0,
     }));
 
     return { categories, totalEvaluations: relevant.length };
@@ -308,22 +306,21 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
     );
     if (relevant.length === 0) return null;
 
-    const categoryScores: { [key: string]: { sum: number; count: number } } = {};
+    const categoryScores: { [key: string]: { total: number; max: number } } = {};
     relevant.forEach(evalu => {
       Object.entries(evalu.answers).forEach(([qId, score]) => {
         const question = questionMap.get(parseInt(qId, 10));
         if (!question || question.type === 'text' || typeof score !== 'number') return;
-        const percent = getPercentageForScore(question, score);
-        if (typeof percent !== 'number') return;
-        if (!categoryScores[question.category]) categoryScores[question.category] = { sum: 0, count: 0 };
-        categoryScores[question.category].sum += percent;
-        categoryScores[question.category].count += 1;
+        if (isNonScoringAnswer(question, score)) return;
+        if (!categoryScores[question.category]) categoryScores[question.category] = { total: 0, max: 0 };
+        categoryScores[question.category].total += getPointValue(question, score);
+        categoryScores[question.category].max += 1;
       });
     });
 
     const categories = Object.entries(categoryScores).map(([name, data]) => ({
       name,
-      percent: data.count > 0 ? Math.round(data.sum / data.count) : 0,
+      percent: data.max > 0 ? Math.round(Math.min(100, Math.max(0, (data.total / data.max) * 100))) : 0,
     }));
 
     return { categories, totalEvaluations: relevant.length };
@@ -447,7 +444,7 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
 
       const categoriesInEvaluation = new Set<string>();
       Object.keys(evalu.answers).forEach((qId) => {
-        const question = internalQuestionMap.get(parseInt(qId, 10));
+        const question = questionMap.get(parseInt(qId, 10));
         if (question) categoriesInEvaluation.add(question.category);
       });
       const categoriesList = Array.from(categoriesInEvaluation);
@@ -529,8 +526,39 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
     return results;
   };
 
-  const getQuestionTotalsForCategory = (categoryName: string) => {     if (!categoryName) return [];     const categoryQuestions = internalQuestions.filter(question =>       question.category === categoryName && question.type !== 'text'     );     if (categoryQuestions.length === 0) return [];      const totals = new Map<number, number>();     filteredEvaluations.forEach((evaluation) => {       categoryQuestions.forEach((question) => {         const value = evaluation.answers[question.id];         if (typeof value === 'number' && !isNonScoringAnswer(question, value)) {           totals.set(question.id, (totals.get(question.id) || 0) + getPointValue(question, value));         }       });     });      return categoryQuestions.map(question => {       const total = totals.get(question.id);       if (typeof total !== 'number') {         return { id: question.id, text: question.text, total: null };       }       return {         id: question.id,         text: question.text,         total,       };     });   };
+  const getQuestionTotalsForCategory = (categoryName: string) => {
+    if (!categoryName) return [];
+    const categoryQuestions = internalQuestions.filter(question =>
+      question.category === categoryName && question.type !== 'text'
+    );
+    if (categoryQuestions.length === 0) return [];
 
+    const totals = new Map<number, { total: number; max: number }>();
+    filteredEvaluations.forEach((evaluation) => {
+      categoryQuestions.forEach((question) => {
+        const value = evaluation.answers[question.id];
+        if (typeof value !== 'number') return;
+        if (isNonScoringAnswer(question, value)) return;
+        const current = totals.get(question.id) || { total: 0, max: 0 };
+        current.total += getPointValue(question, value);
+        current.max += 1;
+        totals.set(question.id, current);
+      });
+    });
+
+    return categoryQuestions.map(question => {
+      const data = totals.get(question.id);
+      if (!data || data.max === 0) {
+        return { id: question.id, text: question.text, percent: null };
+      }
+      const percent = Math.round(Math.min(100, Math.max(0, (data.total / data.max) * 100)));
+      return {
+        id: question.id,
+        text: question.text,
+        percent,
+      };
+    });
+  };
   const getPeerQuestionTotalsForEmployee = (empId: string) => {     const relevant = filteredEvaluations.filter(evaluation => (       evaluation.evaluatedId === empId       && Object.keys(evaluation.answers).some(questionId => peerQuestionIds.has(Number(questionId)))     ));     const totals = new Map<number, number>();      relevant.forEach(evaluation => {       peerQuestions.forEach(question => {         const value = evaluation.answers[question.id];         if (typeof value === 'number' && !isNonScoringAnswer(question, value)) {           totals.set(question.id, (totals.get(question.id) || 0) + getPointValue(question, value));         }       });     });      const totalsByQuestion = peerQuestions.map(question => {       const total = totals.get(question.id);       return typeof total === 'number' ? total : null;     });     const numericTotals = totalsByQuestion.filter((value): value is number => typeof value === 'number');     const totalOverall = numericTotals.length > 0       ? numericTotals.reduce((sum, value) => sum + value, 0)       : null;     return {       hasData: relevant.length > 0 && numericTotals.length > 0,       evaluationsCount: relevant.length,       totals: totalsByQuestion,       totalOverall,     };   };
   const handleAIAnalysis = async () => {
     if (!selectedEmp) return;
@@ -960,14 +988,14 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
             <div className="mt-6 space-y-6">
               {selectedInternalCategory && (
                 <div>
-                  <h4 className="text-sm font-semibold text-slate-700">Preguntas y total</h4>
+                  <h4 className="text-sm font-semibold text-slate-700">Preguntas y porcentaje</h4>
                   {internalCategoryQuestionTotals.length > 0 ? (
                     <div className="mt-3 space-y-2">
                       {internalCategoryQuestionTotals.map(item => (
                         <div key={`${item.id}`} className="flex items-start justify-between gap-4 border rounded-lg p-3 text-sm bg-slate-50">
                           <span className="text-slate-700">{item.text}</span>
                           <span className="text-xs font-semibold text-slate-600">
-                            {item.total === null ? 'Sin respuestas' : item.total}
+                            {item.percent === null ? 'Sin respuestas' : `${item.percent}%`}
                           </span>
                         </div>
                       ))}

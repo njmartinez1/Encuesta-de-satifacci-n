@@ -5,7 +5,7 @@
 do $$
 declare
   keep_admin_email text := 'norman.martinez@reinventedpuembo.edu.ec';
-begin
+begin           
   if keep_admin_email = 'KEEP_ADMIN_EMAIL' then
     raise exception 'Set keep_admin_email to the admin email you want to keep.';
   end if;
@@ -21,5 +21,4 @@ truncate table public.assignments restart identity cascade;
 truncate table public.evaluator_questions restart identity cascade;
 truncate table public.questions restart identity cascade;
 truncate table public.question_categories restart identity cascade;
-truncate table public.question_sections restart identity cascade;
 truncate table public.allowed_emails restart identity cascade;
