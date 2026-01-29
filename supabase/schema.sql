@@ -21,10 +21,7 @@ alter table public.profiles
 alter table public.profiles
   add column if not exists access_role text not null default 'educator';
 
-create table if not exists public.allowed_emails (
-  email text primary key,
-  created_at timestamptz not null default now()
-);
+-- allowed_emails table removed (access now based on profiles + auth)
 
 create table if not exists public.evaluation_periods (
   id uuid primary key default gen_random_uuid(),
@@ -167,14 +164,11 @@ stable
 security definer
 set search_path = public
 as $$
-  select case
-    when (select count(*) from public.allowed_emails) = 0 then true
-    else exists (
-      select 1
-      from public.allowed_emails
-      where lower(email) = lower((select auth.jwt() ->> 'email'))
-    )
-  end;
+  select exists (
+    select 1
+    from public.profiles
+    where id = (select auth.uid())
+  );
 $$;
 
 create or replace function public.current_access_role()
@@ -262,7 +256,6 @@ alter table public.evaluations
   alter column period_id set default public.current_evaluation_period_id();
 
 alter table public.profiles enable row level security;
-alter table public.allowed_emails enable row level security;
 alter table public.evaluation_periods enable row level security;
 alter table public.question_categories enable row level security;
 alter table public.question_sections enable row level security;
@@ -273,8 +266,6 @@ alter table public.evaluations enable row level security;
 
 drop policy if exists profiles_select_own_or_admin on public.profiles;
 drop policy if exists profiles_update_admin on public.profiles;
-drop policy if exists allowed_emails_select_self on public.allowed_emails;
-drop policy if exists allowed_emails_admin_all on public.allowed_emails;
 drop policy if exists evaluation_periods_select_authenticated on public.evaluation_periods;
 drop policy if exists evaluation_periods_admin_all on public.evaluation_periods;
 drop policy if exists categories_select_authenticated on public.question_categories;
@@ -316,16 +307,7 @@ for update
 using (public.is_allowed_email() and public.is_admin())
 with check (public.is_allowed_email() and public.is_admin());
 
-create policy "allowed_emails_select_self"
-on public.allowed_emails
-for select
-using (lower(email) = lower((select auth.jwt() ->> 'email')));
-
-create policy "allowed_emails_admin_all"
-on public.allowed_emails
-for all
-using (public.is_allowed_email() and public.is_admin())
-with check (public.is_allowed_email() and public.is_admin());
+drop table if exists public.allowed_emails cascade;
 
 create policy "evaluation_periods_select_authenticated"
 on public.evaluation_periods

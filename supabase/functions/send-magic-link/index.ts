@@ -181,36 +181,28 @@ serve(async (req) => {
     });
   }
 
-  const { count: allowedCount, error: countError } = await adminClient
-    .from("allowed_emails")
-    .select("*", { count: "exact", head: true });
+  const { data: profileData, error: profileError } = await adminClient
+    .from("profiles")
+    .select("email")
+    .ilike("email", email)
+    .maybeSingle();
 
-  if (countError) {
-    return new Response(JSON.stringify({ error: "Failed to check allowlist." }), {
+  if (profileError) {
+    return new Response(JSON.stringify({ error: "Failed to check profile." }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 
-  let isAllowed = (allowedCount ?? 0) === 0;
-  if (!isAllowed) {
-    const { data: allowedData, error: allowedError } = await adminClient
-      .from("allowed_emails")
-      .select("email")
-      .ilike("email", email)
-      .maybeSingle();
-
-    if (allowedError) {
-      return new Response(JSON.stringify({ error: "Failed to check allowlist." }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    isAllowed = Boolean(allowedData);
+  if (!profileData?.email) {
+    return new Response(JSON.stringify({ error: "Tu cuenta no tiene acceso." }), {
+      status: 403,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 
-  if (!isAllowed) {
+  const { data: authLookup, error: authLookupError } = await adminClient.auth.admin.getUserByEmail(email);
+  if (authLookupError || !authLookup?.user) {
     return new Response(JSON.stringify({ error: "Tu cuenta no tiene acceso." }), {
       status: 403,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
