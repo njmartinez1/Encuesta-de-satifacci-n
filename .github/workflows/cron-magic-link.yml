@@ -9,6 +9,16 @@ jobs:
   run:
     runs-on: ubuntu-latest
     steps:
+      - name: Validate secrets
+        run: |
+          if [ -z "${{ secrets.SUPABASE_FUNCTION_URL }}" ]; then
+            echo "SUPABASE_FUNCTION_URL secret is missing."
+            exit 1
+          fi
+          if [ -z "${{ secrets.SUPABASE_ANON_KEY }}" ]; then
+            echo "SUPABASE_ANON_KEY secret is missing."
+            exit 1
+          fi
       - name: Call queue processor
         run: |
           curl -s -X POST "${{ secrets.SUPABASE_FUNCTION_URL }}" \
