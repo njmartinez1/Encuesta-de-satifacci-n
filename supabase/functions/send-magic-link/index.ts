@@ -149,80 +149,94 @@ serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  let payload: { email?: string; redirectTo?: string };
   try {
-    payload = await req.json();
-  } catch {
-    return new Response(JSON.stringify({ error: "Invalid JSON body." }), {
-      status: 400,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-
-  const email = (payload.email ?? "").trim().toLowerCase();
-  const rawRedirectTo = (payload.redirectTo ?? "").trim();
-  const sanitizeRedirect = (value: string) => {
-    if (!value) return value;
+    let payload: { email?: string; redirectTo?: string };
     try {
-      const url = new URL(value);
-      if (url.hostname === "localhost" || url.hostname === "127.0.0.1") {
+      payload = await req.json();
+    } catch {
+      return new Response(JSON.stringify({ error: "Invalid JSON body." }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const email = (payload.email ?? "").trim().toLowerCase();
+    const rawRedirectTo = (payload.redirectTo ?? "").trim();
+    const sanitizeRedirect = (value: string) => {
+      if (!value) return value;
+      try {
+        const url = new URL(value);
+        if (url.hostname === "localhost" || url.hostname === "127.0.0.1") {
+          return "";
+        }
+      } catch {
         return "";
       }
-    } catch {
-      return "";
+      return value;
+    };
+    const redirectTo = appSiteUrl || sanitizeRedirect(rawRedirectTo);
+
+    if (!email) {
+      return new Response(JSON.stringify({ error: "Missing email." }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
-    return value;
-  };
-  const redirectTo = appSiteUrl || sanitizeRedirect(rawRedirectTo);
 
-  if (!email) {
-    return new Response(JSON.stringify({ error: "Missing email." }), {
-      status: 400,
+    const { data: profileData, error: profileError } = await adminClient
+      .from("profiles")
+      .select("email")
+      .ilike("email", email)
+      .maybeSingle();
+
+    if (profileError) {
+      return new Response(JSON.stringify({ error: "Failed to check profile." }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (!profileData?.email) {
+      return new Response(JSON.stringify({ error: "Tu cuenta no tiene acceso." }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const { data: authLookup, error: authLookupError } = await adminClient
+      .schema("auth")
+      .from("users")
+      .select("id")
+      .ilike("email", email)
+      .maybeSingle();
+
+    if (authLookupError || !authLookup?.id) {
+      return new Response(JSON.stringify({ error: "Tu cuenta no tiene acceso." }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const { error: queueError } = await adminClient
+      .from("magic_link_queue")
+      .insert({ email, redirect_to: redirectTo || null });
+
+    if (queueError) {
+      return new Response(JSON.stringify({ error: "Failed to queue magic link." }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  }
-
-  const { data: profileData, error: profileError } = await adminClient
-    .from("profiles")
-    .select("email")
-    .ilike("email", email)
-    .maybeSingle();
-
-  if (profileError) {
-    return new Response(JSON.stringify({ error: "Failed to check profile." }), {
+  } catch (error) {
+    console.error("send-magic-link error", error);
+    return new Response(JSON.stringify({ error: "Internal server error." }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-
-  if (!profileData?.email) {
-    return new Response(JSON.stringify({ error: "Tu cuenta no tiene acceso." }), {
-      status: 403,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-
-  const { data: authLookup, error: authLookupError } = await adminClient.auth.admin.getUserByEmail(email);
-  if (authLookupError || !authLookup?.user) {
-    return new Response(JSON.stringify({ error: "Tu cuenta no tiene acceso." }), {
-      status: 403,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-
-  const { error: queueError } = await adminClient
-    .from("magic_link_queue")
-    .insert({ email, redirect_to: redirectTo || null });
-
-  if (queueError) {
-    return new Response(JSON.stringify({ error: "Failed to queue magic link." }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-
-  return new Response(JSON.stringify({ success: true }), {
-    status: 200,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
 });
