@@ -254,7 +254,7 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
     const categoryScores: { [key: string]: { total: number; max: number } } = {};
     relevant.forEach(evalu => {
       Object.entries(evalu.answers).forEach(([qId, score]) => {
-        const question = questionMap.get(parseInt(qId, 10));
+        const question = peerQuestionMap.get(parseInt(qId, 10));
         if (!question || question.type === 'text' || typeof score !== 'number') return;
         if (isNonScoringAnswer(question, score)) return;
         if (!categoryScores[question.category]) categoryScores[question.category] = { total: 0, max: 0 };
@@ -282,7 +282,7 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
     const categoryScores: { [key: string]: { total: number; max: number } } = {};
     relevant.forEach(evalu => {
       Object.entries(evalu.answers).forEach(([qId, score]) => {
-        const question = questionMap.get(parseInt(qId, 10));
+        const question = internalQuestionMap.get(parseInt(qId, 10));
         if (!question || question.type === 'text' || typeof score !== 'number') return;
         if (isNonScoringAnswer(question, score)) return;
         if (!categoryScores[question.category]) categoryScores[question.category] = { total: 0, max: 0 };
