@@ -20,6 +20,7 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
   const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null);
   const [viewMode, setViewMode] = useState<'employee' | 'general'>('employee');
   const [selectedCampus, setSelectedCampus] = useState('all');
+  const [employeeSearch, setEmployeeSearch] = useState('');
   const [selectedInternalCategory, setSelectedInternalCategory] = useState('');
   const [aiAnalysis, setAiAnalysis] = useState<string>('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -978,8 +979,8 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
           <div className="bg-white p-6 rounded-xl border">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
-                <h3 className="font-bold text-slate-800">Comentarios por sección</h3>
-                <p className="text-sm text-slate-500">Selecciona una barra en la gráfica para ver los comentarios registrados.</p>
+                <h3 className="font-bold text-slate-800">Preguntas y porcentaje</h3>
+                <p className="text-sm text-slate-500">Selecciona una barra en la gráfica para ver el detalle de la sección.</p>
               </div>
               <span className="inline-flex items-center px-3 py-2 rounded-full text-sm font-semibold bg-slate-100 text-slate-700">
                 {selectedInternalCategory || 'Sin categoría'}
@@ -988,7 +989,6 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
             <div className="mt-6 space-y-6">
               {selectedInternalCategory && (
                 <div>
-                  <h4 className="text-sm font-semibold text-slate-700">Preguntas y porcentaje</h4>
                   {internalCategoryQuestionTotals.length > 0 ? (
                     <div className="mt-3 space-y-2">
                       {internalCategoryQuestionTotals.map(item => (
@@ -1007,18 +1007,21 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
                   )}
                 </div>
               )}
-              <div className="space-y-3 max-h-80 overflow-y-auto">
-                {selectedInternalCategory && internalCategoryComments.length > 0 ? (
-                  internalCategoryComments.map((comment, index) => (
-                    <div key={`${selectedInternalCategory}-${index}`} className="border rounded-lg p-4 text-sm text-slate-700 bg-slate-50">
-                      {comment}
+              <div>
+                <h4 className="text-sm font-semibold text-slate-700">Comentarios por sección</h4>
+                <div className="mt-3 space-y-3 max-h-80 overflow-y-auto">
+                  {selectedInternalCategory && internalCategoryComments.length > 0 ? (
+                    internalCategoryComments.map((comment, index) => (
+                      <div key={`${selectedInternalCategory}-${index}`} className="border rounded-lg p-4 text-sm text-slate-700 bg-slate-50">
+                        {comment}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-sm text-slate-400 bg-slate-50 border border-dashed rounded-xl p-6 text-center">
+                      {selectedInternalCategory ? 'No hay comentarios para esta categoría.' : 'Selecciona una categoría para ver comentarios.'}
                     </div>
-                  ))
-                ) : (
-                  <div className="text-sm text-slate-400 bg-slate-50 border border-dashed rounded-xl p-6 text-center">
-                    {selectedInternalCategory ? 'No hay comentarios para esta categoría.' : 'Selecciona una categoría para ver comentarios.'}
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             </div>
           </div>
