@@ -41,6 +41,25 @@ const adminClient = createClient(supabaseUrl, serviceRoleKey, {
   auth: { persistSession: false },
 });
 
+const getAuthUserByEmail = async (email: string) => {
+  const url = `${supabaseUrl}/auth/v1/admin/users?email=${encodeURIComponent(email)}`;
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${serviceRoleKey}`,
+      apikey: serviceRoleKey,
+    },
+  });
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(data?.msg ?? data?.error ?? "Failed to query auth users.");
+  }
+  // Supabase returns either a user object or an array depending on endpoint version
+  if (Array.isArray(data)) {
+    return data[0] ?? null;
+  }
+  return data?.user ?? data ?? null;
+};
+
 const templates: Record<string, Template> = {
   "reinventedpuembo.edu.ec": {
     subject: "Acceso a Encuestas Reinvented - ReinventED Puembo",
@@ -197,21 +216,21 @@ serve(async (req) => {
     }
 
     if (!profileData?.email) {
-      return new Response(JSON.stringify({ error: "Tu cuenta no tiene acceso." }), {
+      return new Response(JSON.stringify({ error: "Tu cuenta no tiene acceso.", code: "profile_missing" }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const { data: authLookup, error: authLookupError } = await adminClient
-      .schema("auth")
-      .from("users")
-      .select("id")
-      .ilike("email", email)
-      .maybeSingle();
+    let authUser: { id?: string } | null = null;
+    try {
+      authUser = await getAuthUserByEmail(email);
+    } catch {
+      authUser = null;
+    }
 
-    if (authLookupError || !authLookup?.id) {
-      return new Response(JSON.stringify({ error: "Tu cuenta no tiene acceso." }), {
+    if (!authUser?.id) {
+      return new Response(JSON.stringify({ error: "Tu cuenta no tiene acceso.", code: "auth_missing" }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
