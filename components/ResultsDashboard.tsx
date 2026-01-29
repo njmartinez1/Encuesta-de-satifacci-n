@@ -215,15 +215,18 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
     );
   };
 
-  const isZeroToTenQuestion = (question: Question) =>
-    question.text.toLowerCase().includes('en una escala del 0 al 10');
+  const isZeroToTenQuestion = (question: Question) => {
+    const text = question.text.toLowerCase();
+    return text.includes('del 1 al 10') || text.includes('escala del 1 al 10') || text.includes('del 0 al 10') || text.includes('escala del 0 al 10');
+  };
+
   const normalizeZeroToTenValue = (value: number, question: Question) => {
     if (question.options && question.options.length === 11) {
       return value - 1;
     }
-    if (value > 10) return value - 1;
     return value;
   };
+
   const getPointValue = (question: Question, score: number) => {
     if (isZeroToTenQuestion(question)) {
       const normalized = normalizeZeroToTenValue(score, question);
@@ -233,16 +236,7 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
     }
     return score;
   };
-  const getQuestionOptionCount = (question: Question) =>
-    question.options && question.options.length > 0 ? question.options.length : 4;
-  const getPercentageForScore = (question: Question, score: number) => {
-    if (isNonScoringAnswer(question, score)) return null;
-    const value = getPointValue(question, score);
-    const range = isZeroToTenQuestion(question)
-      ? { min: -1, max: 1 }
-      : getScaleRangeFromCount(getQuestionOptionCount(question));
-    return getScorePercentage(value, range.min, range.max);
-  };
+
   const getStatsForEmployee = (empId: string) => {
     const relevant = filteredEvaluations.filter(e => {
       if (e.evaluatedId !== empId) return false;
@@ -928,7 +922,7 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
                           {row.totalOverall === null ? '-' : row.totalOverall}
                         </td>
                         <td className="px-3 py-2 text-right font-semibold text-slate-700">
-                          {row.totalOverall === null || row.evaluationsCount === 0 ? '-' : Math.round(Math.min(100, Math.max(0, (row.totalOverall / (row.evaluationsCount * 6)) * 100)))}
+                          {row.totalOverall === null || row.evaluationsCount === 0 || peerQuestions.length === 0 ? '-' : Math.round(Math.min(100, Math.max(0, (row.totalOverall / (row.evaluationsCount * peerQuestions.length)) * 100)))}
                         </td>
                         {row.totals.map((value, index) => (
                           <td key={`peer-${row.employee.id}-${index}`} className="px-3 py-2 text-right text-slate-700">
