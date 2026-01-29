@@ -459,3 +459,20 @@ on public.evaluations
 for delete
 using (public.is_allowed_email() and public.is_admin());
 
+-- Queue for magic link emails
+create table if not exists public.magic_link_queue (
+  id uuid primary key default gen_random_uuid(),
+  email text not null,
+  redirect_to text,
+  status text not null default 'pending',
+  attempts integer not null default 0,
+  last_error text,
+  created_at timestamptz not null default now(),
+  sent_at timestamptz,
+  next_attempt_at timestamptz not null default now()
+);
+
+create index if not exists magic_link_queue_status_next_attempt_idx
+  on public.magic_link_queue (status, next_attempt_at);
+
+alter table public.magic_link_queue enable row level security;

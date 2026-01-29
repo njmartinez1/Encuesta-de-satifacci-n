@@ -20,17 +20,6 @@ const clientSecret = Deno.env.get("M365_CLIENT_SECRET") ?? "";
 const senderEmail = Deno.env.get("M365_SENDER_EMAIL") ?? "";
 const senderName = Deno.env.get("M365_SENDER_NAME") ?? "Encuestas Reinvented";
 const appSiteUrl = Deno.env.get("APP_SITE_URL") ?? Deno.env.get("SITE_URL") ?? "";
-const missingM365Config = [
-  ["M365_TENANT_ID", tenantId],
-  ["M365_CLIENT_ID", clientId],
-  ["M365_CLIENT_SECRET", clientSecret],
-  ["M365_SENDER_EMAIL", senderEmail],
-].filter(([, value]) => !value);
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
 
 if (!supabaseUrl || !serviceRoleKey) {
   throw new Error("Missing SUPABASE_URL or SERVICE_ROLE_KEY.");
@@ -51,7 +40,7 @@ const templates: Record<string, Template> = {
   "reinventedsantaclara.edu.ec": {
     subject: "Acceso a Encuestas Reinvented",
     heading: "Acceso a Encuestas Reinvented",
-    intro: "Haz clic en el enlace para continuar con tu evaluaciÃ³n.",
+    intro: "Haz clic en el enlace para continuar con tu evaluación.",
     buttonText: "Continuar",
     footer: "Si no solicitaste este acceso, ignora este mensaje.",
   },
@@ -84,22 +73,27 @@ const getGraphToken = async () => {
   if (cachedGraphToken && Date.now() < cachedGraphToken.expiresAt - 60_000) {
     return cachedGraphToken.token;
   }
+
   const params = new URLSearchParams();
   params.set("client_id", clientId);
   params.set("client_secret", clientSecret);
   params.set("grant_type", "client_credentials");
   params.set("scope", "https://graph.microsoft.com/.default");
 
-  const response = await fetch(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: params,
-  });
+  const response = await fetch(
+    `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params,
+    }
+  );
 
   const data = await response.json();
   if (!response.ok || !data.access_token) {
     throw new Error(data?.error_description ?? "Failed to get Graph token.");
   }
+
   const expiresIn = Number(data?.expires_in ?? 0);
   if (Number.isFinite(expiresIn) && expiresIn > 0) {
     cachedGraphToken = {
@@ -107,15 +101,11 @@ const getGraphToken = async () => {
       expiresAt: Date.now() + expiresIn * 1000,
     };
   }
+
   return data.access_token as string;
 };
 
-  const sendEmail = async (to: string, subject: string, html: string) => {
-  if (missingM365Config.length > 0) {
-    const missing = missingM365Config.map(([key]) => key).join(", ");
-    throw new Error(`Missing Microsoft 365 email configuration: ${missing}`);
-  }
-
+const sendEmail = async (to: string, subject: string, html: string) => {
   const token = await getGraphToken();
   const response = await fetch(
     `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(senderEmail)}/sendMail`,
@@ -143,93 +133,113 @@ const getGraphToken = async () => {
   }
 };
 
-serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
+const backoffMinutes = (attempts: number) => {
+  if (attempts <= 1) return 1;
+  if (attempts === 2) return 5;
+  if (attempts === 3) return 15;
+  return 30;
+};
 
-  let payload: { email?: string; redirectTo?: string };
-  try {
-    payload = await req.json();
-  } catch {
-    return new Response(JSON.stringify({ error: "Invalid JSON body." }), {
-      status: 400,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
+serve(async () => {
+  const missing = [
+    ["M365_TENANT_ID", tenantId],
+    ["M365_CLIENT_ID", clientId],
+    ["M365_CLIENT_SECRET", clientSecret],
+    ["M365_SENDER_EMAIL", senderEmail],
+    ["APP_SITE_URL", appSiteUrl],
+  ].filter(([, value]) => !value);
 
-  const email = (payload.email ?? "").trim().toLowerCase();
-  const rawRedirectTo = (payload.redirectTo ?? "").trim();
-  const sanitizeRedirect = (value: string) => {
-    if (!value) return value;
-    try {
-      const url = new URL(value);
-      if (url.hostname === "localhost" || url.hostname === "127.0.0.1") {
-        return "";
-      }
-    } catch {
-      return "";
-    }
-    return value;
-  };
-  const redirectTo = appSiteUrl || sanitizeRedirect(rawRedirectTo);
-
-  if (!email) {
-    return new Response(JSON.stringify({ error: "Missing email." }), {
-      status: 400,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-
-  const { count: allowedCount, error: countError } = await adminClient
-    .from("allowed_emails")
-    .select("*", { count: "exact", head: true });
-
-  if (countError) {
-    return new Response(JSON.stringify({ error: "Failed to check allowlist." }), {
+  if (missing.length > 0) {
+    const keys = missing.map(([key]) => key).join(", ");
+    return new Response(JSON.stringify({ error: `Missing config: ${keys}` }), {
       status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json" },
     });
   }
 
-  let isAllowed = (allowedCount ?? 0) === 0;
-  if (!isAllowed) {
-    const { data: allowedData, error: allowedError } = await adminClient
-      .from("allowed_emails")
-      .select("email")
-      .ilike("email", email)
-      .maybeSingle();
+  const { data: queueRows, error } = await adminClient
+    .from("magic_link_queue")
+    .select("id, email, redirect_to, attempts")
+    .eq("status", "pending")
+    .lte("next_attempt_at", new Date().toISOString())
+    .order("created_at", { ascending: true })
+    .limit(50);
 
-    if (allowedError) {
-      return new Response(JSON.stringify({ error: "Failed to check allowlist." }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+  if (error) {
+    return new Response(JSON.stringify({ error: "Failed to load queue." }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const results: { id: string; status: string; error?: string }[] = [];
+
+  for (const row of queueRows || []) {
+    const email = String(row.email || "").trim().toLowerCase();
+    if (!email) continue;
+
+    try {
+      const { data: linkData, error: linkError } = await adminClient.auth.admin.generateLink({
+        type: "magiclink",
+        email,
+        options: {
+          redirectTo: appSiteUrl,
+          shouldCreateUser: false,
+        },
+      });
+
+      if (linkError) {
+        throw new Error(linkError.message);
+      }
+
+      const actionLink =
+        (linkData as any)?.properties?.action_link ??
+        (linkData as any)?.action_link;
+      if (!actionLink) {
+        throw new Error("Missing action link.");
+      }
+
+      const domain = email.split("@")[1] ?? "";
+      const template = templates[domain] ?? defaultTemplate;
+      const html = buildHtml(template, actionLink);
+
+      await sendEmail(email, template.subject, html);
+
+      await adminClient
+        .from("magic_link_queue")
+        .update({
+          status: "sent",
+          sent_at: new Date().toISOString(),
+          last_error: null,
+        })
+        .eq("id", row.id);
+
+      results.push({ id: row.id, status: "sent" });
+    } catch (err) {
+      const attempts = Number(row.attempts ?? 0) + 1;
+      const delayMinutes = backoffMinutes(attempts);
+      const nextAttempt = new Date(Date.now() + delayMinutes * 60_000).toISOString();
+
+      await adminClient
+        .from("magic_link_queue")
+        .update({
+          status: attempts >= 5 ? "failed" : "pending",
+          attempts,
+          last_error: err instanceof Error ? err.message : "Send failed",
+          next_attempt_at: nextAttempt,
+        })
+        .eq("id", row.id);
+
+      results.push({
+        id: row.id,
+        status: attempts >= 5 ? "failed" : "pending",
+        error: err instanceof Error ? err.message : "Send failed",
       });
     }
-
-    isAllowed = Boolean(allowedData);
   }
 
-  if (!isAllowed) {
-    return new Response(JSON.stringify({ error: "Tu cuenta no tiene acceso." }), {
-      status: 403,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-
-  const { error: queueError } = await adminClient
-    .from("magic_link_queue")
-    .insert({ email, redirect_to: redirectTo || null });
-
-  if (queueError) {
-    return new Response(JSON.stringify({ error: "Failed to queue magic link." }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-
-  return new Response(JSON.stringify({ success: true }), {
+  return new Response(JSON.stringify({ processed: results.length, results }), {
     status: 200,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" },
   });
 });
