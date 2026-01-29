@@ -237,6 +237,13 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
     return score;
   };
 
+  const getPercentageForScore = (question: Question, score: number) => {
+    if (question.type === 'text') return null;
+    const optionCount = question.options && question.options.length > 0 ? question.options.length : 4;
+    const { min, max } = getScaleRangeFromCount(optionCount);
+    return getScorePercentage(score, min, max);
+  };
+
   const getStatsForEmployee = (empId: string) => {
     const relevant = filteredEvaluations.filter(e => {
       if (e.evaluatedId !== empId) return false;
