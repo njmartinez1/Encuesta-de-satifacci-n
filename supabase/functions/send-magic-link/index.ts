@@ -53,9 +53,12 @@ const getAuthUserByEmail = async (email: string) => {
   if (!response.ok) {
     throw new Error(data?.msg ?? data?.error ?? "Failed to query auth users.");
   }
-  // Supabase returns either a user object or an array depending on endpoint version
+  // Supabase can return { users: [] }, a user object, or an array depending on version
   if (Array.isArray(data)) {
     return data[0] ?? null;
+  }
+  if (Array.isArray(data?.users)) {
+    return data.users[0] ?? null;
   }
   return data?.user ?? data ?? null;
 };
