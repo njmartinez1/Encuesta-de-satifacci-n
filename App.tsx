@@ -1420,7 +1420,7 @@ const App: React.FC = () => {
     );
   }
 
-  if (isLoadingData || !currentUser) {
+  if (!currentUser) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500" style={themeStyle}>
         Cargando datos...
@@ -1805,6 +1805,7 @@ const App: React.FC = () => {
 };
 
 export default App;
+
 
 
 
