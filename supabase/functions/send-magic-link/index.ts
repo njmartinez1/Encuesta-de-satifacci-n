@@ -20,6 +20,10 @@ const clientSecret = Deno.env.get("M365_CLIENT_SECRET") ?? "";
 const senderEmail = Deno.env.get("M365_SENDER_EMAIL") ?? "";
 const senderName = Deno.env.get("M365_SENDER_NAME") ?? "Encuestas Reinvented";
 const appSiteUrl = Deno.env.get("APP_SITE_URL") ?? Deno.env.get("SITE_URL") ?? "";
+const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+const processQueueUrl =
+  Deno.env.get("PROCESS_MAGIC_LINK_URL") ??
+  (supabaseUrl ? `${supabaseUrl}/functions/v1/process-magic-link-queue` : "");
 const missingM365Config = [
   ["M365_TENANT_ID", tenantId],
   ["M365_CLIENT_ID", clientId],
@@ -40,6 +44,23 @@ if (!supabaseUrl || !serviceRoleKey) {
 const adminClient = createClient(supabaseUrl, serviceRoleKey, {
   auth: { persistSession: false },
 });
+
+const triggerQueueProcessor = async () => {
+  if (!processQueueUrl || !anonKey) return;
+  try {
+    await fetch(processQueueUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${anonKey}`,
+        apikey: anonKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({}),
+    });
+  } catch {
+    // Best-effort trigger; cron remains the fallback.
+  }
+};
 
 const getAuthUserByEmail = async (email: string) => {
   const url = `${supabaseUrl}/auth/v1/admin/users?email=${encodeURIComponent(email)}`;
@@ -249,6 +270,9 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    // Fire-and-forget to speed up delivery; cron remains the fallback.
+    void triggerQueueProcessor();
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
