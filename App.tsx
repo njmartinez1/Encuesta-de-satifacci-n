@@ -96,6 +96,7 @@ const sortQuestionsBySection = (items: Question[], sections: QuestionSectionOpti
 const normalizeAccessRole = (value?: string | null): AccessRole => {
   const normalized = (value ?? '').trim().toLowerCase();
   if (normalized === 'viewer') return 'viewer';
+  if (normalized === 'principal') return 'principal';
   if (normalized === 'educator') return 'educator';
   return 'educator';
 };
@@ -392,6 +393,7 @@ const App: React.FC = () => {
 
       const isAdmin = userProfile.isAdmin;
       const isViewer = userProfile.accessRole === 'viewer';
+      const isPrincipal = userProfile.accessRole === 'principal';
 
       const assignmentsQuery = supabase.from('assignments').select('evaluator_id, target_id');
       if (!isAdmin) assignmentsQuery.eq('evaluator_id', userProfile.id);
@@ -402,7 +404,7 @@ const App: React.FC = () => {
       const evaluationsQuery = supabase
         .from('evaluations')
         .select('evaluator_id, evaluated_id, period_id, answers, comments, is_anonymous, created_at');
-      if (!isAdmin && !isViewer) evaluationsQuery.eq('evaluator_id', userProfile.id);
+      if (!isAdmin && !isViewer && !isPrincipal) evaluationsQuery.eq('evaluator_id', userProfile.id);
 
       const [
         profilesRes,
@@ -583,7 +585,8 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!currentUser) return;
     const isViewer = !currentUser.isAdmin && currentUser.accessRole === 'viewer';
-    const canViewResults = currentUser.isAdmin || isViewer;
+    const isPrincipal = !currentUser.isAdmin && currentUser.accessRole === 'principal';
+    const canViewResults = currentUser.isAdmin || isViewer || isPrincipal;
     const canViewSurvey = true;
     const isAllowedView = (
       (view === 'survey' && canViewSurvey)
@@ -591,7 +594,7 @@ const App: React.FC = () => {
       || ((view === 'admin' || view === 'questions') && currentUser.isAdmin)
     );
     if (!isAllowedView) {
-      setView(isViewer ? 'results' : 'survey');
+      setView(isViewer || isPrincipal ? 'results' : 'survey');
     }
   }, [currentUser, view]);
 
@@ -1194,7 +1197,8 @@ const App: React.FC = () => {
   const isAdmin = Boolean(currentUser?.isAdmin);
   const accessRole = currentUser?.accessRole ?? 'educator';
   const isViewer = !isAdmin && accessRole === 'viewer';
-  const canViewResults = isAdmin || isViewer;
+  const isPrincipal = !isAdmin && accessRole === 'principal';
+  const canViewResults = isAdmin || isViewer || isPrincipal;
   const canViewSurvey = true;
   const activePeriodId = activePeriod?.id ?? '';
   const hasActivePeriod = Boolean(activePeriodId);
@@ -1734,6 +1738,7 @@ const App: React.FC = () => {
               questions={questions}
               assignments={assignments}
               campus={currentUser?.campus ?? null}
+              hideEmployeeMatrix={isPrincipal}
             />
           </div>
         )}

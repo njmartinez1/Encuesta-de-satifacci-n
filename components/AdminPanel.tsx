@@ -360,6 +360,7 @@ const AdminPanel: React.FC<Props> = ({
               className="mt-2 w-full px-3 py-2 text-sm border rounded-lg bg-white disabled:opacity-60"
             >
               <option value="educator">Educador</option>
+              <option value="principal">Principal</option>
               <option value="viewer">Visualizador</option>
             </select>
           </label>

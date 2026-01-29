@@ -13,9 +13,10 @@ interface Props {
   questions: Question[];
   assignments: Assignment[];
   campus?: string | null;
+  hideEmployeeMatrix?: boolean;
 }
 
-const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, assignments, campus }) => {
+const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, assignments, campus, hideEmployeeMatrix = false }) => {
   const { showAlert } = useModal();
   const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null);
   const [viewMode, setViewMode] = useState<'employee' | 'general'>('employee');
@@ -950,52 +951,54 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
               </div>
             </div>
           </div>
-          <div className="bg-white p-6 rounded-xl border">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-slate-800">Resultados por empleado (pares)</h3>
-              <span className="text-xs text-slate-500">Puntos por pregunta</span>
-            </div>
-            {hasPeerTableData ? (
-              <div className="overflow-x-auto">
-                <table className="min-w-[900px] w-full text-xs">
-                  <thead>
-                    <tr className="bg-slate-100 text-slate-600">
-                      <th className="text-left px-3 py-2 font-semibold">Empleado</th>
-                      <th className="text-right px-3 py-2 font-semibold">TOTAL</th>
-                      <th className="text-right px-3 py-2 font-semibold">AVERAGE</th>
-                      {peerQuestions.map(question => (
-                        <th key={`peer-head-${question.id}`} className="text-right px-3 py-2 font-semibold">
-                          {question.text}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {peerTableRows.map(row => (
-                      <tr key={row.employee.id} className="border-t">
-                        <td className="px-3 py-2 text-slate-700 whitespace-nowrap">{row.employee.name}</td>
-                        <td className="px-3 py-2 text-right font-semibold text-slate-700">
-                          {row.totalOverall === null ? '-' : row.totalOverall}
-                        </td>
-                        <td className="px-3 py-2 text-right font-semibold text-slate-700">
-                          {row.totalOverall === null || row.evaluationsCount === 0 || peerQuestions.length === 0 ? '-' : Math.round(Math.min(100, Math.max(0, (row.totalOverall / (row.evaluationsCount * peerQuestions.length)) * 100)))}
-                        </td>
-                        {row.totals.map((value, index) => (
-                          <td key={`peer-${row.employee.id}-${index}`} className="px-3 py-2 text-right text-slate-700">
-                            {value === null ? '-' : value}
-                          </td>
+          {!hideEmployeeMatrix && (
+            <div className="bg-white p-6 rounded-xl border">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-slate-800">Resultados por empleado (pares)</h3>
+                <span className="text-xs text-slate-500">Puntos por pregunta</span>
+              </div>
+              {hasPeerTableData ? (
+                <div className="overflow-x-auto">
+                  <table className="min-w-[900px] w-full text-xs">
+                    <thead>
+                      <tr className="bg-slate-100 text-slate-600">
+                        <th className="text-left px-3 py-2 font-semibold">Empleado</th>
+                        <th className="text-right px-3 py-2 font-semibold">TOTAL</th>
+                        <th className="text-right px-3 py-2 font-semibold">AVERAGE</th>
+                        {peerQuestions.map(question => (
+                          <th key={`peer-head-${question.id}`} className="text-right px-3 py-2 font-semibold">
+                            {question.text}
+                          </th>
                         ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="text-sm text-slate-400 bg-slate-50 border border-dashed rounded-xl p-6 text-center">
-                No hay evaluaciones de pares para mostrar.
-              </div>
-            )}
-          </div>
+                    </thead>
+                    <tbody>
+                      {peerTableRows.map(row => (
+                        <tr key={row.employee.id} className="border-t">
+                          <td className="px-3 py-2 text-slate-700 whitespace-nowrap">{row.employee.name}</td>
+                          <td className="px-3 py-2 text-right font-semibold text-slate-700">
+                            {row.totalOverall === null ? '-' : row.totalOverall}
+                          </td>
+                          <td className="px-3 py-2 text-right font-semibold text-slate-700">
+                            {row.totalOverall === null || row.evaluationsCount === 0 || peerQuestions.length === 0 ? '-' : Math.round(Math.min(100, Math.max(0, (row.totalOverall / (row.evaluationsCount * peerQuestions.length)) * 100)))}
+                          </td>
+                          {row.totals.map((value, index) => (
+                            <td key={`peer-${row.employee.id}-${index}`} className="px-3 py-2 text-right text-slate-700">
+                              {value === null ? '-' : value}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-sm text-slate-400 bg-slate-50 border border-dashed rounded-xl p-6 text-center">
+                  No hay evaluaciones de pares para mostrar.
+                </div>
+              )}
+            </div>
+          )}
           <div className="bg-white p-6 rounded-xl border">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
