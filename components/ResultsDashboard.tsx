@@ -254,6 +254,11 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
     return getScorePercentage(score, min, max);
   };
 
+  const handleOverallInternalChartClick = (chartState?: { activeLabel?: string; activePayload?: { payload?: { name?: string } }[] }) => {
+    const label = chartState?.activeLabel ?? chartState?.activePayload?.[0]?.payload?.name;
+    if (label) setSelectedInternalCategory(label);
+  };
+
   const getStatsForEmployee = (empId: string) => {
     const relevant = filteredEvaluations.filter(e => {
       if (e.evaluatedId !== empId) return false;
@@ -454,7 +459,7 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
 
       const categoriesInEvaluation = new Set<string>();
       Object.keys(evalu.answers).forEach((qId) => {
-        const question = questionMap.get(parseInt(qId, 10));
+        const question = internalQuestionMap.get(parseInt(qId, 10));
         if (question) categoriesInEvaluation.add(question.category);
       });
       const categoriesList = Array.from(categoriesInEvaluation);
@@ -923,7 +928,7 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
               {overallInternalStats ? (
                 <div className="h-56" ref={overallInternalChartRef}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={overallInternalStats.categories}>
+                    <BarChart data={overallInternalStats.categories} onClick={handleOverallInternalChartClick}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} />
                       <XAxis dataKey="name" tick={false} />
                       <YAxis domain={[0, 100]} tickFormatter={formatPercent} />
