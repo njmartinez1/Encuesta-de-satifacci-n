@@ -963,6 +963,7 @@ const App: React.FC = () => {
         question_type: type,
         options: type === 'scale' ? options : null,
         sort_order: nextSortOrder,
+        is_required: requiredValue,
       })
       .eq('id', id);
     if (error) {
