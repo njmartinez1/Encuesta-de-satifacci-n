@@ -92,7 +92,7 @@ const ResultsDashboard: React.FC<Props> = ({
   const formatCampusLabel = (value: string) => {
     const trimmed = value.trim();
     if (!trimmed) return 'Sin colegio';
-    return trimmed.toLowerCase().includes('colegio') ? trimmed : `Colegio ${trimmed}`;
+    return trimmed;
   };
 
   const campusOptions = Array.from(
