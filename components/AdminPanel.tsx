@@ -553,7 +553,12 @@ const AdminPanel: React.FC<Props> = ({
                         className="flex items-center gap-3 p-3 rounded-xl border-2 text-left border-emerald-500 bg-emerald-50"
                       >
                         <CheckCircle2 size={18} className="text-emerald-500" />
-                        <span className="text-sm font-medium">{emp.name}</span>
+                        <div>
+                          <span className="text-sm font-medium">{emp.name}</span>
+                          {emp.campus && (
+                            <p className="text-xs text-slate-500">Sucursal: {emp.campus}</p>
+                          )}
+                        </div>
                       </button>
                     ))}
                   </div>
@@ -592,7 +597,12 @@ const AdminPanel: React.FC<Props> = ({
                             className={`flex items-center gap-3 p-3 rounded-xl border-2 text-left ${isAssigned ? 'border-emerald-500 bg-emerald-50' : 'border-slate-100 bg-slate-50'}`}
                           >
                             <CheckCircle2 size={18} className={isAssigned ? 'text-emerald-500' : 'text-slate-300'} />
-                            <span className="text-sm font-medium">{emp.name}</span>
+                            <div>
+                              <span className="text-sm font-medium">{emp.name}</span>
+                              {emp.campus && (
+                                <p className="text-xs text-slate-500">Sucursal: {emp.campus}</p>
+                              )}
+                            </div>
                           </button>
                         );
                       })}

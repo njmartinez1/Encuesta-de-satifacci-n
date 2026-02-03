@@ -1765,6 +1765,8 @@ const App: React.FC = () => {
               hideEmployeeMatrix={isPrincipal}
               hideEmployeeTab={isPrincipal}
               hideGeneralExport={isPrincipal}
+              canSelectCampus={isAdmin}
+              forcedCampus={isAdmin ? null : (currentUser?.campus ?? null)}
             />
           </div>
         )}

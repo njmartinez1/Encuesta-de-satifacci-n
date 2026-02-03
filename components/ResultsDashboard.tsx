@@ -16,6 +16,8 @@ interface Props {
   hideEmployeeMatrix?: boolean;
   hideEmployeeTab?: boolean;
   hideGeneralExport?: boolean;
+  canSelectCampus?: boolean;
+  forcedCampus?: string | null;
 }
 
 const ResultsDashboard: React.FC<Props> = ({
@@ -27,13 +29,17 @@ const ResultsDashboard: React.FC<Props> = ({
   hideEmployeeMatrix = false,
   hideEmployeeTab = false,
   hideGeneralExport = false,
+  canSelectCampus = false,
+  forcedCampus = null,
 }) => {
   const { showAlert } = useModal();
   const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null);
   const [viewMode, setViewMode] = useState<'employee' | 'general'>(() => (
     hideEmployeeTab ? 'general' : 'employee'
   ));
-  const [selectedCampus, setSelectedCampus] = useState('all');
+  const [selectedCampus, setSelectedCampus] = useState(() => (
+    !canSelectCampus && forcedCampus ? forcedCampus : 'all'
+  ));
   const [employeeSearch, setEmployeeSearch] = useState('');
   const [selectedInternalCategory, setSelectedInternalCategory] = useState('');
   const [aiAnalysis, setAiAnalysis] = useState<string>('');
@@ -82,6 +88,12 @@ const ResultsDashboard: React.FC<Props> = ({
       assignedCountByTarget[targetId] = (assignedCountByTarget[targetId] || 0) + 1;
     });
   });
+
+  const formatCampusLabel = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return 'Sin colegio';
+    return trimmed.toLowerCase().includes('colegio') ? trimmed : `Colegio ${trimmed}`;
+  };
 
   const campusOptions = Array.from(
     new Set(employees.map(emp => (emp.campus || '').trim()).filter(Boolean))
@@ -644,6 +656,11 @@ const ResultsDashboard: React.FC<Props> = ({
     }
   }, [hideEmployeeTab, viewMode]);
   useEffect(() => {
+    if (!canSelectCampus && forcedCampus && selectedCampus !== forcedCampus) {
+      setSelectedCampus(forcedCampus);
+    }
+  }, [canSelectCampus, forcedCampus, selectedCampus]);
+  useEffect(() => {
     if (!internalCategories.length) {
       setSelectedInternalCategory('');
       return;
@@ -690,35 +707,44 @@ const ResultsDashboard: React.FC<Props> = ({
     <div className="space-y-6">
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-2 bg-slate-100 rounded-full p-1 w-fit">
-        {!hideEmployeeTab && (
+          {!hideEmployeeTab && (
+            <button
+              onClick={() => setViewMode('employee')}
+              className={`px-4 py-2 rounded-full text-xs font-semibold transition-all ${viewMode === 'employee' ? 'bg-[var(--color-primary)] text-white shadow-sm' : 'text-slate-600'}`}
+            >
+              Empleado
+            </button>
+          )}
           <button
-            onClick={() => setViewMode('employee')}
-            className={`px-4 py-2 rounded-full text-xs font-semibold transition-all ${viewMode === 'employee' ? 'bg-[var(--color-primary)] text-white shadow-sm' : 'text-slate-600'}`}
+            onClick={() => setViewMode('general')}
+            className={`px-4 py-2 rounded-full text-xs font-semibold transition-all ${viewMode === 'general' ? 'bg-[var(--color-primary)] text-white shadow-sm' : 'text-slate-600'}`}
           >
-            Empleado
+            General
           </button>
-        )}
-        <button
-          onClick={() => setViewMode('general')}
-          className={`px-4 py-2 rounded-full text-xs font-semibold transition-all ${viewMode === 'general' ? 'bg-[var(--color-primary)] text-white shadow-sm' : 'text-slate-600'}`}
-        >
-          General
-        </button>
-      </div>
-        <div className="flex items-center gap-2 text-xs text-slate-500">
-          <label htmlFor="results-campus" className="font-semibold">Colegio</label>
-          <select
-            id="results-campus"
-            value={selectedCampus}
-            onChange={(event) => setSelectedCampus(event.target.value)}
-            className="border border-slate-200 rounded-md bg-white px-3 py-2 text-xs text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30"
-          >
-            <option value="all">Todos los colegios</option>
-            {campusOptions.map(campus => (
-              <option key={campus} value={campus}>{campus}</option>
-            ))}
-          </select>
         </div>
+        {canSelectCampus ? (
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <label htmlFor="results-campus" className="font-semibold">Colegio</label>
+            <select
+              id="results-campus"
+              value={selectedCampus}
+              onChange={(event) => setSelectedCampus(event.target.value)}
+              className="border border-slate-200 rounded-md bg-white px-3 py-2 text-xs text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30"
+            >
+              <option value="all">Todos los colegios</option>
+              {campusOptions.map(campusOption => (
+                <option key={campusOption} value={campusOption}>{campusOption}</option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <span className="font-semibold">Colegio</span>
+            <span className="border border-slate-200 rounded-md bg-slate-100 px-3 py-2 text-xs text-slate-700 shadow-sm">
+              {formatCampusLabel(forcedCampus || '')}
+            </span>
+          </div>
+        )}
       </div>
 
       {viewMode === 'employee' ? (
