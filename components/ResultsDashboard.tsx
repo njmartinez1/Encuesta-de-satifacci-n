@@ -14,12 +14,25 @@ interface Props {
   assignments: Assignment[];
   campus?: string | null;
   hideEmployeeMatrix?: boolean;
+  hideEmployeeTab?: boolean;
+  hideGeneralExport?: boolean;
 }
 
-const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, assignments, campus, hideEmployeeMatrix = false }) => {
+const ResultsDashboard: React.FC<Props> = ({
+  evaluations,
+  employees,
+  questions,
+  assignments,
+  campus,
+  hideEmployeeMatrix = false,
+  hideEmployeeTab = false,
+  hideGeneralExport = false,
+}) => {
   const { showAlert } = useModal();
   const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null);
-  const [viewMode, setViewMode] = useState<'employee' | 'general'>('employee');
+  const [viewMode, setViewMode] = useState<'employee' | 'general'>(() => (
+    hideEmployeeTab ? 'general' : 'employee'
+  ));
   const [selectedCampus, setSelectedCampus] = useState('all');
   const [employeeSearch, setEmployeeSearch] = useState('');
   const [selectedInternalCategory, setSelectedInternalCategory] = useState('');
@@ -626,6 +639,11 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
 
   useEffect(() => { setAiAnalysis(''); }, [selectedEmp]);
   useEffect(() => {
+    if (hideEmployeeTab && viewMode === 'employee') {
+      setViewMode('general');
+    }
+  }, [hideEmployeeTab, viewMode]);
+  useEffect(() => {
     if (!internalCategories.length) {
       setSelectedInternalCategory('');
       return;
@@ -672,12 +690,14 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
     <div className="space-y-6">
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-2 bg-slate-100 rounded-full p-1 w-fit">
-        <button
-          onClick={() => setViewMode('employee')}
-          className={`px-4 py-2 rounded-full text-xs font-semibold transition-all ${viewMode === 'employee' ? 'bg-[var(--color-primary)] text-white shadow-sm' : 'text-slate-600'}`}
-        >
-          Empleado
-        </button>
+        {!hideEmployeeTab && (
+          <button
+            onClick={() => setViewMode('employee')}
+            className={`px-4 py-2 rounded-full text-xs font-semibold transition-all ${viewMode === 'employee' ? 'bg-[var(--color-primary)] text-white shadow-sm' : 'text-slate-600'}`}
+          >
+            Empleado
+          </button>
+        )}
         <button
           onClick={() => setViewMode('general')}
           className={`px-4 py-2 rounded-full text-xs font-semibold transition-all ${viewMode === 'general' ? 'bg-[var(--color-primary)] text-white shadow-sm' : 'text-slate-600'}`}
@@ -870,13 +890,15 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
                   <h4 className="font-semibold text-slate-800">Desempeño general</h4>
                   <div className="flex items-center gap-3">
                     <span className="text-xs text-slate-500">{overallPeerQuestionStats ? `${overallPeerQuestionStats.totalEvaluations} evaluaciones` : 'Sin datos'}</span>
-                    <button
-                      onClick={handleExportGeneralPeer}
-                      disabled={!canExportPeer}
-                      className="text-[var(--color-primary)] flex items-center gap-2 text-xs font-bold disabled:opacity-50"
-                    >
-                      <Download size={14} /> Exportar CSV
-                    </button>
+                    {!hideGeneralExport && (
+                      <button
+                        onClick={handleExportGeneralPeer}
+                        disabled={!canExportPeer}
+                        className="text-[var(--color-primary)] flex items-center gap-2 text-xs font-bold disabled:opacity-50"
+                      >
+                        <Download size={14} /> Exportar CSV
+                      </button>
+                    )}
                     {overallPeerQuestionStats && (
                       <button onClick={() => copyChartToClipboard(overallPeerChartRef)} className="text-[var(--color-primary)] flex items-center gap-2 text-xs font-bold">
                         <Copy size={14} /> Copiar Imagen
@@ -911,13 +933,15 @@ const ResultsDashboard: React.FC<Props> = ({ evaluations, employees, questions, 
                   <h4 className="font-semibold text-slate-800">Satisfacción interna (global)</h4>
                   <div className="flex items-center gap-3">
                     <span className="text-xs text-slate-500">{overallInternalStats ? `${overallInternalStats.totalEvaluations} evaluaciones` : 'Sin datos'}</span>
-                    <button
-                      onClick={handleExportGeneralInternal}
-                      disabled={!canExportInternal}
-                      className="text-[var(--color-primary)] flex items-center gap-2 text-xs font-bold disabled:opacity-50"
-                    >
-                      <Download size={14} /> Exportar CSV
-                    </button>
+                    {!hideGeneralExport && (
+                      <button
+                        onClick={handleExportGeneralInternal}
+                        disabled={!canExportInternal}
+                        className="text-[var(--color-primary)] flex items-center gap-2 text-xs font-bold disabled:opacity-50"
+                      >
+                        <Download size={14} /> Exportar CSV
+                      </button>
+                    )}
                     {overallInternalStats && (
                       <button onClick={() => copyChartToClipboard(overallInternalChartRef)} className="text-[var(--color-primary)] flex items-center gap-2 text-xs font-bold">
                         <Copy size={14} /> Copiar Imagen

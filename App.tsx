@@ -1174,26 +1174,49 @@ const App: React.FC = () => {
       showAlert("No hay preguntas configuradas.");
       return;
     }
-    const headers = ["Evaluador", "Evaluado", ...questions.map(q => `P${q.id}`), "Comentarios", "Fecha"];
+    const escapeCsvValue = (value: string | number | null | undefined) => {
+      if (value === null || value === undefined) return '';
+      const stringValue = String(value);
+      if (/[",\n]/.test(stringValue)) {
+        return `"${stringValue.replace(/"/g, '""')}"`;
+      }
+      return stringValue;
+    };
+    const headers = [
+      "Evaluador",
+      "Evaluado",
+      "Anonimo",
+      ...questions.map(q => q.text),
+      "Comentarios",
+      "Fecha",
+    ];
     const rows = exportEvaluations.map(e => {
       const evaluator = employees.find(emp => emp.id === e.evaluatorId)?.name || 'N/A';
       const evaluated = employees.find(emp => emp.id === e.evaluatedId)?.name || 'N/A';
       const scores = questions.map(q => {
         const value = e.answers[q.id];
         if (typeof value === 'number') return value;
-        if (typeof value === 'string') return `"${value.replace(/"/g, '""')}"`;
+        if (typeof value === 'string') return value;
         return '';
       });
-      return [evaluator, evaluated, ...scores, `"${e.comments.replace(/"/g, '""')}"`, e.timestamp].join(',');
+      const row = [
+        evaluator,
+        evaluated,
+        e.isAnonymous ? 'true' : 'false',
+        ...scores,
+        e.comments || '',
+        e.timestamp,
+      ];
+      return row.map(escapeCsvValue).join(',');
     });
-    const csvContent = [headers.join(','), ...rows].join('\n');
+    const csvContent = [headers.map(escapeCsvValue).join(','), ...rows].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
     link.setAttribute('download', `evaluaciones_${new Date().toISOString().split('T')[0]}.csv`);
     link.click();
-  };
+  }; 
 
   const isAdmin = Boolean(currentUser?.isAdmin);
   const accessRole = currentUser?.accessRole ?? 'educator';
@@ -1740,6 +1763,8 @@ const App: React.FC = () => {
               assignments={assignments}
               campus={currentUser?.campus ?? null}
               hideEmployeeMatrix={isPrincipal}
+              hideEmployeeTab={isPrincipal}
+              hideGeneralExport={isPrincipal}
             />
           </div>
         )}
