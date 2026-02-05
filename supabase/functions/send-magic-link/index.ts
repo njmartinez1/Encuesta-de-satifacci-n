@@ -95,6 +95,8 @@ const getAuthUserById = async (userId: string) => {
     },
   });
   const data = await response.json().catch(() => null);
+  console.log("ADMIN USER BY ID STATUS", response.status);
+  console.log("ADMIN USER BY ID BODY", data);
   if (!response.ok) {
     throw new Error(data?.msg ?? data?.error ?? "Failed to query auth user by id.");
   }
@@ -265,14 +267,14 @@ serve(async (req) => {
 
     let authUser: { id?: string; email?: string } | null = null;
     try {
-      authUser = await getAuthUserByEmail(email);
+      authUser = await getAuthUserById(profileData.id);
     } catch {
       authUser = null;
     }
 
     if (!authUser?.id) {
       try {
-        authUser = await getAuthUserById(profileData.id);
+        authUser = await getAuthUserByEmail(email);
       } catch {
         authUser = null;
       }
