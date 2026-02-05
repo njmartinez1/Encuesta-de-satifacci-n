@@ -71,6 +71,8 @@ const getAuthUserByEmail = async (email: string) => {
     },
   });
   const data = await response.json().catch(() => null);
+  console.log("ADMIN USERS STATUS", response.status);
+  console.log("ADMIN USERS BODY", data);
   if (!response.ok) {
     throw new Error(data?.msg ?? data?.error ?? "Failed to query auth users.");
   }
@@ -80,6 +82,21 @@ const getAuthUserByEmail = async (email: string) => {
   }
   if (Array.isArray(data?.users)) {
     return data.users[0] ?? null;
+  }
+  return data?.user ?? data ?? null;
+};
+
+const getAuthUserById = async (userId: string) => {
+  const url = `${supabaseUrl}/auth/v1/admin/users/${encodeURIComponent(userId)}`;
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${serviceRoleKey}`,
+      apikey: serviceRoleKey,
+    },
+  });
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(data?.msg ?? data?.error ?? "Failed to query auth user by id.");
   }
   return data?.user ?? data ?? null;
 };
@@ -228,7 +245,7 @@ serve(async (req) => {
 
     const { data: profileData, error: profileError } = await adminClient
       .from("profiles")
-      .select("email")
+      .select("id, email")
       .ilike("email", email)
       .maybeSingle();
 
@@ -239,14 +256,14 @@ serve(async (req) => {
       });
     }
 
-    if (!profileData?.email) {
+    if (!profileData?.email || !profileData?.id) {
       return new Response(JSON.stringify({ error: "Tu cuenta no tiene acceso.", code: "profile_missing" }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    let authUser: { id?: string } | null = null;
+    let authUser: { id?: string; email?: string } | null = null;
     try {
       authUser = await getAuthUserByEmail(email);
     } catch {
@@ -254,7 +271,25 @@ serve(async (req) => {
     }
 
     if (!authUser?.id) {
+      try {
+        authUser = await getAuthUserById(profileData.id);
+      } catch {
+        authUser = null;
+      }
+    }
+
+    if (!authUser?.id) {
       return new Response(JSON.stringify({ error: "Tu cuenta no tiene acceso.", code: "auth_missing" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (authUser.email && authUser.email.toLowerCase() !== email) {
+      return new Response(JSON.stringify({
+        error: "El correo de Auth no coincide con Profiles. Contacta al administrador.",
+        code: "auth_email_mismatch",
+      }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

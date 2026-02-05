@@ -97,8 +97,6 @@ serve(async (req) => {
 
   const userId = createData.user.id;
 
-  await adminClient.from("allowed_emails").upsert({ email });
-
   await adminClient.from("profiles").upsert({
     id: userId,
     email,

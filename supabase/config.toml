@@ -13,8 +13,8 @@ verify_jwt = false
 [functions.process-magic-link-queue]
 verify_jwt = false
 
-[cron]
-jobs = [
-  { name = "process-magic-link-queue", schedule = "* * * * *", command = "process-magic-link-queue" }
-]
+# [cron]
+# jobs = [
+#   { name = "process-magic-link-queue", schedule = "* * * * *", command = "process-magic-link-queue" }
+# ]
 
