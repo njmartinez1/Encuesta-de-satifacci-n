@@ -62,6 +62,46 @@ const triggerQueueProcessor = async () => {
   }
 };
 
+const getAuthUserByEmail = async (email: string) => {
+  const url = `${supabaseUrl}/auth/v1/admin/users?email=${encodeURIComponent(email)}`;
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${serviceRoleKey}`,
+      apikey: serviceRoleKey,
+    },
+  });
+  const data = await response.json().catch(() => null);
+  console.log("ADMIN USERS STATUS", response.status);
+  console.log("ADMIN USERS BODY", data);
+  if (!response.ok) {
+    throw new Error(data?.msg ?? data?.error ?? "Failed to query auth users.");
+  }
+  // Supabase can return { users: [] }, a user object, or an array depending on version
+  if (Array.isArray(data)) {
+    return data[0] ?? null;
+  }
+  if (Array.isArray(data?.users)) {
+    return data.users[0] ?? null;
+  }
+  return data?.user ?? data ?? null;
+};
+
+const getAuthUserById = async (userId: string) => {
+  const url = `${supabaseUrl}/auth/v1/admin/users/${encodeURIComponent(userId)}`;
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${serviceRoleKey}`,
+      apikey: serviceRoleKey,
+    },
+  });
+  const data = await response.json().catch(() => null);
+  console.log("ADMIN USER BY ID STATUS", response.status);
+  console.log("ADMIN USER BY ID BODY", data);
+  if (!response.ok) {
+    throw new Error(data?.msg ?? data?.error ?? "Failed to query auth user by id.");
+  }
+  return data?.user ?? data ?? null;
+};
 
 const templates: Record<string, Template> = {
   "reinventedpuembo.edu.ec": {
@@ -225,8 +265,37 @@ serve(async (req) => {
       });
     }
 
-    // Auth admin lookup removed to avoid Supabase Admin API 500 errors.
-    // Access is granted based on presence in profiles.
+    let authUser: { id?: string; email?: string } | null = null;
+    try {
+      authUser = await getAuthUserById(profileData.id);
+    } catch {
+      authUser = null;
+    }
+
+    if (!authUser?.id) {
+      try {
+        authUser = await getAuthUserByEmail(email);
+      } catch {
+        authUser = null;
+      }
+    }
+
+    if (!authUser?.id) {
+      return new Response(JSON.stringify({ error: "Tu cuenta no tiene acceso.", code: "auth_missing" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (authUser.email && authUser.email.toLowerCase() !== email) {
+      return new Response(JSON.stringify({
+        error: "El correo de Auth no coincide con Profiles. Contacta al administrador.",
+        code: "auth_email_mismatch",
+      }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const { error: queueError } = await adminClient
       .from("magic_link_queue")
