@@ -134,6 +134,25 @@ const ResultsDashboard: React.FC<Props> = ({
     }
     return stringValue;
   };
+  const escapeCsvValueWithDelimiter = (
+    value: string | number | null | undefined,
+    delimiter: string
+  ) => {
+    if (value === null || value === undefined) return '';
+    const stringValue = String(value);
+    const needsQuotes = stringValue.includes(delimiter) || /["\n]/.test(stringValue);
+    if (needsQuotes) {
+      return `"${stringValue.replace(/"/g, '""')}"`;
+    }
+    return stringValue;
+  };
+  const formatCsvNumber = (value: number) => {
+    const rounded = Math.round(value * 100) / 100;
+    const stringValue = Number.isInteger(rounded)
+      ? String(rounded)
+      : rounded.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+    return stringValue.replace('.', ',');
+  };
 
   const buildEvaluationCsv = (
     evaluationList: Evaluation[],
@@ -173,8 +192,12 @@ const ResultsDashboard: React.FC<Props> = ({
       });
       return [evaluator, evaluated, ...anonymity, ...answers, evaluation.comments || '', evaluation.timestamp];
     });
+    const delimiter = ';';
     return [headers, ...rows]
-      .map(row => row.map(escapeCsvValue).join(','))
+      .map(row => row
+        .map(value => (typeof value === 'number' ? formatCsvNumber(value) : value))
+        .map(value => escapeCsvValueWithDelimiter(value, delimiter))
+        .join(delimiter))
       .join('\n');
   };
 
@@ -288,7 +311,7 @@ const ResultsDashboard: React.FC<Props> = ({
         const total = row.totals[index];
         const pct = row.percents[index];
         return [
-          total === null ? '' : formatPointAverage(total),
+          total === null ? '' : total,
           pct === null ? '' : pct,
         ];
       });
