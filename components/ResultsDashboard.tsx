@@ -275,7 +275,7 @@ const ResultsDashboard: React.FC<Props> = ({
       'TOTAL',
       'AVERAGE',
       ...peerQuestions.flatMap(question => ([
-        `${question.text} (Promedio)`,
+        `${question.text} (Puntos)`,
         `${question.text} (%)`,
       ])),
     ];
@@ -285,10 +285,10 @@ const ResultsDashboard: React.FC<Props> = ({
         ? null
         : Math.round(Math.min(100, Math.max(0, (row.totalOverall / (row.evaluationsCount * peerQuestions.length)) * 100)));
       const questionValues = peerQuestions.flatMap((_, index) => {
-        const avg = row.averages[index];
+        const total = row.totals[index];
         const pct = row.percents[index];
         return [
-          avg === null ? '' : formatPointAverage(avg),
+          total === null ? '' : formatPointAverage(total),
           pct === null ? '' : pct,
         ];
       });
@@ -1144,7 +1144,7 @@ const ResultsDashboard: React.FC<Props> = ({
                         {peerQuestions.map(question => (
                           <th key={`peer-head-${question.id}`} className="text-right px-3 py-2 font-semibold">
                             <span className="block text-right">{question.text}</span>
-                            <span className="block text-[10px] text-slate-400 font-normal">Prom / %</span>
+                            <span className="block text-[10px] text-slate-400 font-normal">Puntos / %</span>
                           </th>
                         ))}
                       </tr>
@@ -1159,7 +1159,7 @@ const ResultsDashboard: React.FC<Props> = ({
                           <td className="px-3 py-2 text-right font-semibold text-slate-700">
                             {row.totalOverall === null || row.evaluationsCount === 0 || peerQuestions.length === 0 ? '-' : Math.round(Math.min(100, Math.max(0, (row.totalOverall / (row.evaluationsCount * peerQuestions.length)) * 100)))}
                           </td>
-                          {row.averages.map((value, index) => {
+                          {row.totals.map((value, index) => {
                             const percent = row.percents[index];
                             return (
                               <td key={`peer-${row.employee.id}-${index}`} className="px-3 py-2 text-right text-slate-700">
