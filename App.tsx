@@ -788,9 +788,16 @@ const App: React.FC = () => {
     const mergedComments = shouldMerge
       ? [existingComments, newCommentBlock].filter(Boolean).join('\n\n')
       : newCommentBlock;
-    const resolvedAnonymity = selectedEvaluationSection === 'internal'
-      ? Boolean(internalAnonymityChoice ?? existingEvaluation?.isAnonymous)
-      : false;
+    const internalAnonymityPreference = internalAnonymityChoice ?? evaluations.find(
+      evaluation => evaluation.evaluatorId === evalData.evaluatorId
+        && evaluation.evaluatedId === evalData.evaluatorId
+        && evaluation.periodId === periodId
+    )?.isAnonymous;
+    const resolvedAnonymity = Boolean(
+      selectedEvaluationSection === 'internal'
+        ? (internalAnonymityPreference ?? existingEvaluation?.isAnonymous)
+        : (internalAnonymityPreference ?? existingEvaluation?.isAnonymous ?? false)
+    );
 
     const { error } = await supabase
       .from('evaluations')

@@ -65,6 +65,15 @@ const ResultsDashboard: React.FC<Props> = ({
   const internalQuestions = questions.filter(question => question.section === 'internal');
   const peerQuestionIds = new Set(peerQuestions.map(question => question.id));
   const internalQuestionIds = new Set(internalQuestions.map(question => question.id));
+  const internalAnonymityByEvaluator = new Map<string, boolean>();
+  evaluations.forEach(evaluation => {
+    if (evaluation.evaluatorId !== evaluation.evaluatedId) return;
+    const hasInternalAnswer = Object.keys(evaluation.answers).some(questionId =>
+      internalQuestionIds.has(Number(questionId))
+    );
+    if (!hasInternalAnswer) return;
+    internalAnonymityByEvaluator.set(evaluation.evaluatorId, evaluation.isAnonymous);
+  });
   const normalizeOptionLabel = (value: string) => value
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -132,6 +141,7 @@ const ResultsDashboard: React.FC<Props> = ({
     options: { includeAnonymous?: boolean } = {}
   ) => {
     const includeAnonymous = options.includeAnonymous ?? false;
+    const isPeerExport = questionList.length > 0 && questionList.every(question => question.section === 'peer');
     const headers = [
       'Evaluador',
       'Evaluado',
@@ -143,7 +153,12 @@ const ResultsDashboard: React.FC<Props> = ({
     const rows = evaluationList.map((evaluation) => {
       const evaluator = employees.find(emp => emp.id === evaluation.evaluatorId)?.name || 'N/A';
       const evaluated = employees.find(emp => emp.id === evaluation.evaluatedId)?.name || 'N/A';
-      const anonymity = includeAnonymous ? [evaluation.isAnonymous ? 'Si' : 'No'] : [];
+      const resolvedAnonymity = includeAnonymous
+        ? (isPeerExport
+          ? (internalAnonymityByEvaluator.get(evaluation.evaluatorId) ?? evaluation.isAnonymous)
+          : evaluation.isAnonymous)
+        : false;
+      const anonymity = includeAnonymous ? [resolvedAnonymity ? 'Si' : 'No'] : [];
       const answers = questionList.map((question) => {
         const value = evaluation.answers[question.id];
         if (typeof value === 'number') {
