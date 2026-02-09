@@ -230,12 +230,16 @@ const ResultsDashboard: React.FC<Props> = ({
   };
 
   const handleExportGeneralPeer = () => {
-    const relevant = filterEvaluationsByQuestions(peerQuestionIds);
+    const exportBase = selectedCampus === 'all'
+      ? filteredEvaluations
+      : filteredEvaluations.filter(evaluation => filteredEmployeeIds.has(evaluation.evaluatedId));
+    const relevant = filterEvaluationsByQuestions(peerQuestionIds, exportBase);
     exportCsv(
       buildFilename('desempeño_general'),
       relevant,
       peerQuestions,
-      'No hay evaluaciones de pares registradas.'
+      'No hay evaluaciones de pares registradas.',
+      { includeAnonymous: true }
     );
   };
 
