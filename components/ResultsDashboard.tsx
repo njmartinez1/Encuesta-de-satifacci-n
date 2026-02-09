@@ -269,6 +269,55 @@ const ResultsDashboard: React.FC<Props> = ({
     );
   };
 
+  const buildPeerMatrixCsv = () => {
+    const headers = [
+      'Empleado',
+      'TOTAL',
+      'AVERAGE',
+      ...peerQuestions.flatMap(question => ([
+        `${question.text} (Promedio)`,
+        `${question.text} (%)`,
+      ])),
+    ];
+
+    const rows = peerTableRows.map(row => {
+      const overallPercent = row.totalOverall === null || row.evaluationsCount === 0 || peerQuestions.length === 0
+        ? null
+        : Math.round(Math.min(100, Math.max(0, (row.totalOverall / (row.evaluationsCount * peerQuestions.length)) * 100)));
+      const questionValues = peerQuestions.flatMap((_, index) => {
+        const avg = row.averages[index];
+        const pct = row.percents[index];
+        return [
+          avg === null ? '' : formatPointAverage(avg),
+          pct === null ? '' : pct,
+        ];
+      });
+      return [
+        row.employee.name,
+        row.totalOverall === null ? '' : row.totalOverall,
+        overallPercent === null ? '' : overallPercent,
+        ...questionValues,
+      ];
+    });
+
+    return [headers, ...rows]
+      .map(row => row.map(escapeCsvValue).join(','))
+      .join('\n');
+  };
+
+  const handleExportPeerMatrix = () => {
+    if (peerQuestions.length === 0) {
+      showAlert('No hay preguntas configuradas para exportar.');
+      return;
+    }
+    if (!hasPeerTableData) {
+      showAlert('No hay evaluaciones de pares para mostrar.');
+      return;
+    }
+    const csvContent = buildPeerMatrixCsv();
+    downloadCsv(buildFilename('resultados_empleados_pares'), csvContent);
+  };
+
   const isZeroToTenQuestion = (question: Question) => {
     const text = question.text.toLowerCase();
     return text.includes('del 1 al 10') || text.includes('escala del 1 al 10') || text.includes('del 0 al 10') || text.includes('escala del 0 al 10');
@@ -420,6 +469,10 @@ const ResultsDashboard: React.FC<Props> = ({
 
 
   const formatPercent = (value: number) => `${Math.round(value)}%`;
+  const formatPointAverage = (value: number) => {
+    const rounded = Math.round(value * 100) / 100;
+    return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2);
+  };
   const renderScoreTooltip = () => ({
     active,
     payload,
@@ -618,7 +671,47 @@ const ResultsDashboard: React.FC<Props> = ({
       };
     });
   };
-  const getPeerQuestionTotalsForEmployee = (empId: string) => {     const relevant = filteredEvaluations.filter(evaluation => (       evaluation.evaluatedId === empId       && Object.keys(evaluation.answers).some(questionId => peerQuestionIds.has(Number(questionId)))     ));     const totals = new Map<number, number>();      relevant.forEach(evaluation => {       peerQuestions.forEach(question => {         const value = evaluation.answers[question.id];         if (typeof value === 'number' && !isNonScoringAnswer(question, value)) {           totals.set(question.id, (totals.get(question.id) || 0) + getPointValue(question, value));         }       });     });      const totalsByQuestion = peerQuestions.map(question => {       const total = totals.get(question.id);       return typeof total === 'number' ? total : null;     });     const numericTotals = totalsByQuestion.filter((value): value is number => typeof value === 'number');     const totalOverall = numericTotals.length > 0       ? numericTotals.reduce((sum, value) => sum + value, 0)       : null;     return {       hasData: relevant.length > 0 && numericTotals.length > 0,       evaluationsCount: relevant.length,       totals: totalsByQuestion,       totalOverall,     };   };
+  const getPeerQuestionTotalsForEmployee = (empId: string) => {
+    const relevant = filteredEvaluations.filter(evaluation => (
+      evaluation.evaluatedId === empId
+      && Object.keys(evaluation.answers).some(questionId => peerQuestionIds.has(Number(questionId)))
+    ));
+    const totals = new Map<number, number>();
+
+    relevant.forEach(evaluation => {
+      peerQuestions.forEach(question => {
+        const value = evaluation.answers[question.id];
+        if (typeof value === 'number' && !isNonScoringAnswer(question, value)) {
+          totals.set(question.id, (totals.get(question.id) || 0) + getPointValue(question, value));
+        }
+      });
+    });
+
+    const totalsByQuestion = peerQuestions.map(question => {
+      const total = totals.get(question.id);
+      return typeof total === 'number' ? total : null;
+    });
+    const numericTotals = totalsByQuestion.filter((value): value is number => typeof value === 'number');
+    const totalOverall = numericTotals.length > 0
+      ? numericTotals.reduce((sum, value) => sum + value, 0)
+      : null;
+    const averagesByQuestion = totalsByQuestion.map(total => (
+      total === null || relevant.length === 0 ? null : total / relevant.length
+    ));
+    const percentsByQuestion = totalsByQuestion.map(total => {
+      if (total === null || relevant.length === 0) return null;
+      return Math.round(Math.min(100, Math.max(0, (total / relevant.length) * 100)));
+    });
+
+    return {
+      hasData: relevant.length > 0 && numericTotals.length > 0,
+      evaluationsCount: relevant.length,
+      totals: totalsByQuestion,
+      averages: averagesByQuestion,
+      percents: percentsByQuestion,
+      totalOverall,
+    };
+  };
   const handleAIAnalysis = async () => {
     if (!selectedEmp) return;
     setIsAnalyzing(true);
@@ -1027,9 +1120,18 @@ const ResultsDashboard: React.FC<Props> = ({
           </div>
           {!hideEmployeeMatrix && (
             <div className="bg-white p-6 rounded-xl border">
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-4">
                 <h3 className="font-bold text-slate-800">Resultados por empleado (pares)</h3>
-                <span className="text-xs text-slate-500">Puntos por pregunta</span>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-slate-500">Promedio y % por pregunta</span>
+                  <button
+                    onClick={handleExportPeerMatrix}
+                    disabled={!hasPeerTableData || peerQuestions.length === 0}
+                    className="text-[var(--color-primary)] flex items-center gap-2 text-xs font-bold disabled:opacity-50"
+                  >
+                    <Download size={14} /> Exportar CSV
+                  </button>
+                </div>
               </div>
               {hasPeerTableData ? (
                 <div className="overflow-x-auto">
@@ -1041,7 +1143,8 @@ const ResultsDashboard: React.FC<Props> = ({
                         <th className="text-right px-3 py-2 font-semibold">AVERAGE</th>
                         {peerQuestions.map(question => (
                           <th key={`peer-head-${question.id}`} className="text-right px-3 py-2 font-semibold">
-                            {question.text}
+                            <span className="block text-right">{question.text}</span>
+                            <span className="block text-[10px] text-slate-400 font-normal">Prom / %</span>
                           </th>
                         ))}
                       </tr>
@@ -1056,11 +1159,21 @@ const ResultsDashboard: React.FC<Props> = ({
                           <td className="px-3 py-2 text-right font-semibold text-slate-700">
                             {row.totalOverall === null || row.evaluationsCount === 0 || peerQuestions.length === 0 ? '-' : Math.round(Math.min(100, Math.max(0, (row.totalOverall / (row.evaluationsCount * peerQuestions.length)) * 100)))}
                           </td>
-                          {row.totals.map((value, index) => (
-                            <td key={`peer-${row.employee.id}-${index}`} className="px-3 py-2 text-right text-slate-700">
-                              {value === null ? '-' : value}
-                            </td>
-                          ))}
+                          {row.averages.map((value, index) => {
+                            const percent = row.percents[index];
+                            return (
+                              <td key={`peer-${row.employee.id}-${index}`} className="px-3 py-2 text-right text-slate-700">
+                                {value === null || percent === null ? (
+                                  '-'
+                                ) : (
+                                  <div className="flex flex-col items-end">
+                                    <span className="font-semibold">{formatPointAverage(value)}</span>
+                                    <span className="text-[10px] text-slate-500">{percent}%</span>
+                                  </div>
+                                )}
+                              </td>
+                            );
+                          })}
                         </tr>
                       ))}
                     </tbody>
