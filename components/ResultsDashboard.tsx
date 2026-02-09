@@ -193,12 +193,13 @@ const ResultsDashboard: React.FC<Props> = ({
       return [evaluator, evaluated, ...anonymity, ...answers, evaluation.comments || '', evaluation.timestamp];
     });
     const delimiter = ';';
-    return [headers, ...rows]
+    const lines = [headers, ...rows]
       .map(row => row
         .map(value => (typeof value === 'number' ? formatCsvNumber(value) : value))
         .map(value => escapeCsvValueWithDelimiter(value, delimiter))
         .join(delimiter))
       .join('\n');
+    return `sep=${delimiter}\n${lines}`;
   };
 
   const downloadCsv = (filename: string, content: string) => {
