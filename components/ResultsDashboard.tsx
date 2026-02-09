@@ -324,9 +324,14 @@ const ResultsDashboard: React.FC<Props> = ({
       ];
     });
 
-    return [headers, ...rows]
-      .map(row => row.map(escapeCsvValue).join(','))
+    const delimiter = ';';
+    const lines = [headers, ...rows]
+      .map(row => row
+        .map(value => (typeof value === 'number' ? formatCsvNumber(value) : value))
+        .map(value => escapeCsvValueWithDelimiter(value, delimiter))
+        .join(delimiter))
       .join('\n');
+    return `sep=${delimiter}\n${lines}`;
   };
 
   const handleExportPeerMatrix = () => {

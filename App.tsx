@@ -1181,14 +1181,23 @@ const App: React.FC = () => {
       showAlert("No hay preguntas configuradas.");
       return;
     }
-    const escapeCsvValue = (value: string | number | null | undefined) => {
+    const escapeCsvValueWithDelimiter = (value: string | number | null | undefined, delimiter: string) => {
       if (value === null || value === undefined) return '';
       const stringValue = String(value);
-      if (/[",\n]/.test(stringValue)) {
+      const needsQuotes = stringValue.includes(delimiter) || /["\n]/.test(stringValue);
+      if (needsQuotes) {
         return `"${stringValue.replace(/"/g, '""')}"`;
       }
       return stringValue;
     };
+    const formatCsvNumber = (value: number) => {
+      const rounded = Math.round(value * 100) / 100;
+      const stringValue = Number.isInteger(rounded)
+        ? String(rounded)
+        : rounded.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+      return stringValue.replace('.', ',');
+    };
+    const delimiter = ';';
     const headers = [
       "Evaluador",
       "Evaluado",
@@ -1214,9 +1223,13 @@ const App: React.FC = () => {
         e.comments || '',
         e.timestamp,
       ];
-      return row.map(escapeCsvValue).join(',');
+      return row
+        .map(value => (typeof value === 'number' ? formatCsvNumber(value) : value))
+        .map(value => escapeCsvValueWithDelimiter(value, delimiter))
+        .join(delimiter);
     });
-    const csvContent = [headers.map(escapeCsvValue).join(','), ...rows].join('\n');
+    const headerLine = headers.map(value => escapeCsvValueWithDelimiter(value, delimiter)).join(delimiter);
+    const csvContent = `sep=${delimiter}\n${[headerLine, ...rows].join('\n')}`;
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
