@@ -4,7 +4,7 @@ import { Assignment, Evaluation, Employee, Question } from '../types.ts';
 import { getScaleRangeFromCount, getScorePercentage, getScaleScore } from '../scoreUtils.ts';
 import { analyzeEvaluations } from '../geminiService.ts';
 import { Sparkles, BarChart3, TrendingUp, Copy, Download } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
 import { useModal } from './ModalProvider.tsx';
 
 interface Props {
@@ -416,6 +416,8 @@ const ResultsDashboard: React.FC<Props> = ({
     if (relevant.length === 0) return null;
 
     const categoryScores: { [key: string]: { total: number; max: number } } = {};
+    let totalOverall = 0;
+    let maxOverall = 0;
     relevant.forEach(evalu => {
       Object.entries(evalu.answers).forEach(([qId, score]) => {
         const question = peerQuestionMap.get(parseInt(qId, 10));
@@ -424,6 +426,8 @@ const ResultsDashboard: React.FC<Props> = ({
         if (!categoryScores[question.category]) categoryScores[question.category] = { total: 0, max: 0 };
         categoryScores[question.category].total += getPointValue(question, score);
         categoryScores[question.category].max += 1;
+        totalOverall += getPointValue(question, score);
+        maxOverall += 1;
       });
     });
 
@@ -432,7 +436,11 @@ const ResultsDashboard: React.FC<Props> = ({
       percent: data.max > 0 ? Math.round(Math.min(100, Math.max(0, (data.total / data.max) * 100))) : 0,
     }));
 
-    return { categories, totalEvaluations: relevant.length };
+    const overallPercent = maxOverall > 0
+      ? Math.round(Math.min(100, Math.max(0, (totalOverall / maxOverall) * 100)))
+      : null;
+
+    return { categories, totalEvaluations: relevant.length, overallPercent };
   };
 
   const getInternalStats = (empId: string) => {
@@ -971,20 +979,32 @@ const ResultsDashboard: React.FC<Props> = ({
                         </button>
                       </div>
                     </div>
-                    <div className="h-64" ref={chartRef}>
+                    <div className="h-64 relative" ref={chartRef}>
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={stats.categories}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                          <XAxis dataKey="name" tick={false} />
-                          <YAxis domain={[0, 100]} tickFormatter={formatPercent} />
-                          <Tooltip content={renderScoreTooltip()} />
-                          <Bar dataKey="percent" radius={[4, 4, 0, 0]}>
-                            {stats.categories.map((_, index) => (
-                              <Cell key={`peer-emp-${index}`} fill={getPastelColor(index)} />
-                            ))}
-                          </Bar>
-                        </BarChart>
+                        <PieChart>
+                          <Pie
+                            data={[
+                              { name: 'score', value: stats.overallPercent ?? 0 },
+                              { name: 'rest', value: 100 - (stats.overallPercent ?? 0) },
+                            ]}
+                            dataKey="value"
+                            innerRadius={70}
+                            outerRadius={95}
+                            stroke="none"
+                            startAngle={90}
+                            endAngle={-270}
+                          >
+                            <Cell fill="var(--color-primary)" />
+                            <Cell fill="#e2e8f0" />
+                          </Pie>
+                        </PieChart>
                       </ResponsiveContainer>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                        <div className="text-3xl font-bold text-slate-800">
+                          {stats.overallPercent ?? 0}%
+                        </div>
+                        <div className="text-xs font-semibold text-slate-500">Calificación general</div>
+                      </div>
                     </div>
                     <div className="mt-6">
                       <h4 className="font-semibold text-slate-800 mb-3">Comentarios sobre este empleado</h4>
