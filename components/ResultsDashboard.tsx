@@ -116,9 +116,17 @@ const ResultsDashboard: React.FC<Props> = ({
     new Set(employees.map(emp => (emp.campus || '').trim()).filter(Boolean))
   ).sort((a, b) => a.localeCompare(b, 'es'));
   const normalizedSelectedCampus = normalizeCampusValue(selectedCampus);
+  const campusMatches = (value: string, selected: string) => {
+    if (!selected) return true;
+    const normalizedValue = normalizeCampusValue(value);
+    if (!normalizedValue) return false;
+    return normalizedValue === selected
+      || normalizedValue.includes(selected)
+      || selected.includes(normalizedValue);
+  };
   const filteredEmployees = selectedCampus === 'all'
     ? employees
-    : employees.filter(emp => normalizeCampusValue(emp.campus || '') === normalizedSelectedCampus);
+    : employees.filter(emp => campusMatches(emp.campus || '', normalizedSelectedCampus));
   const filteredEmployeeIds = new Set(filteredEmployees.map(emp => emp.id));
   const normalizedEmployeeSearch = employeeSearch.trim().toLowerCase();
   const filteredEmployeesBySearch = normalizedEmployeeSearch
