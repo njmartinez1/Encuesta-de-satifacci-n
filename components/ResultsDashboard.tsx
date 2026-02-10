@@ -104,13 +104,21 @@ const ResultsDashboard: React.FC<Props> = ({
     return trimmed;
   };
 
+  const normalizeCampusValue = (value: string) => value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\bcolegio\b/g, '')
+    .replace(/[^a-z0-9]+/g, '')
+    .trim();
+
   const campusOptions = Array.from(
     new Set(employees.map(emp => (emp.campus || '').trim()).filter(Boolean))
   ).sort((a, b) => a.localeCompare(b, 'es'));
-  const normalizedSelectedCampus = selectedCampus.trim().toLowerCase();
+  const normalizedSelectedCampus = normalizeCampusValue(selectedCampus);
   const filteredEmployees = selectedCampus === 'all'
     ? employees
-    : employees.filter(emp => (emp.campus || '').trim().toLowerCase() === normalizedSelectedCampus);
+    : employees.filter(emp => normalizeCampusValue(emp.campus || '') === normalizedSelectedCampus);
   const filteredEmployeeIds = new Set(filteredEmployees.map(emp => emp.id));
   const normalizedEmployeeSearch = employeeSearch.trim().toLowerCase();
   const filteredEmployeesBySearch = normalizedEmployeeSearch
