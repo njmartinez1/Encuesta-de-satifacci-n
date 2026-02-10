@@ -323,29 +323,20 @@ const ResultsDashboard: React.FC<Props> = ({
   const buildPeerMatrixCsv = () => {
     const headers = [
       'Empleado',
-      'TOTAL',
       'AVERAGE',
-      ...peerQuestions.flatMap(question => ([
-        `${question.text} (Puntos)`,
-        `${question.text} (%)`,
-      ])),
+      ...peerQuestions.map(question => `${question.text} (%)`),
     ];
 
     const rows = peerTableRows.map(row => {
       const overallPercent = row.totalOverall === null || row.evaluationsCount === 0 || peerQuestions.length === 0
         ? null
         : Math.round(Math.min(100, Math.max(0, (row.totalOverall / (row.evaluationsCount * peerQuestions.length)) * 100)));
-      const questionValues = peerQuestions.flatMap((_, index) => {
-        const total = row.totals[index];
+      const questionValues = peerQuestions.map((_, index) => {
         const pct = row.percents[index];
-        return [
-          total === null ? '' : total,
-          pct === null ? '' : pct,
-        ];
+        return pct === null ? '' : pct;
       });
       return [
         row.employee.name,
-        row.totalOverall === null ? '' : row.totalOverall,
         overallPercent === null ? '' : overallPercent,
         ...questionValues,
       ];
