@@ -714,10 +714,30 @@ const App: React.FC = () => {
     setIsInternalAnonymityPromptOpen(true);
   };
 
-  const handleInternalAnonymityChoice = (isAnonymous: boolean) => {
+  const handleInternalAnonymityChoice = async (isAnonymous: boolean) => {
     setInternalAnonymityChoice(isAnonymous);
     setIsInternalAnonymityPromptOpen(false);
     setSelectedEvaluationSection('internal');
+
+    const periodId = activePeriod?.id;
+    if (!currentUser || !periodId) return;
+
+    const { error: updateAnonymityError } = await supabase
+      .from('evaluations')
+      .update({ is_anonymous: isAnonymous })
+      .eq('evaluator_id', currentUser.id)
+      .eq('period_id', periodId);
+
+    if (updateAnonymityError) {
+      showAlert('No se pudo actualizar el anonimato en todas las respuestas.');
+      return;
+    }
+
+    setEvaluations(prev => prev.map(e => (
+      e.evaluatorId === currentUser.id && e.periodId === periodId
+        ? { ...e, isAnonymous: isAnonymous }
+        : e
+    )));
   };
 
   const formatInternalCommentBlock = (category: string | null, comment: string) => {
