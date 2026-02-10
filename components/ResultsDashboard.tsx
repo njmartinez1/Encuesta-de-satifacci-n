@@ -572,19 +572,22 @@ const ResultsDashboard: React.FC<Props> = ({
   };
 
   const getPeerCommentsForEmployee = (empId: string) => {
-    const results: string[] = [];
+    const results: { text: string; author: string }[] = [];
     filteredEvaluations.forEach(evalu => {
       if (evalu.evaluatedId !== empId) return;
       if (!Object.keys(evalu.answers).some(qId => peerQuestionMap.has(parseInt(qId, 10)))) return;
       const commentText = (evalu.comments || '').trim();
       if (!commentText) return;
+      const authorName = evalu.isAnonymous
+        ? 'Anónimo'
+        : (employees.find(emp => emp.id === evalu.evaluatorId)?.name || 'N/A');
       splitCommentBlocks(commentText).forEach(block => {
         const tagged = parseTaggedBlock(block);
         if (tagged) {
           if (tagged.tag.startsWith('internal')) return;
-          if (tagged.text) results.push(tagged.text);
+          if (tagged.text) results.push({ text: tagged.text, author: authorName });
         } else {
-          results.push(block);
+          results.push({ text: block, author: authorName });
         }
       });
     });
@@ -645,11 +648,14 @@ const ResultsDashboard: React.FC<Props> = ({
     const extractBlocks = (commentText: string) => commentText.split(/\n{2,}/).map(block => block.trim()).filter(Boolean);
     const tagRegex = /^\[\[(.+?)\]\]\s*(.*)$/;
 
-    const results: string[] = [];
+    const results: { text: string; author: string }[] = [];
     filteredEvaluations.forEach((evalu) => {
       if (!Object.keys(evalu.answers).some(qId => questionIds.has(parseInt(qId, 10)))) return;
       const commentText = (evalu.comments || '').trim();
       if (!commentText) return;
+      const authorName = evalu.isAnonymous
+        ? 'Anónimo'
+        : (employees.find(emp => emp.id === evalu.evaluatorId)?.name || 'N/A');
 
       const categoriesInEvaluation = new Set<string>();
       Object.keys(evalu.answers).forEach((qId) => {
@@ -667,15 +673,15 @@ const ResultsDashboard: React.FC<Props> = ({
           if (!text) return;
           if (tag.startsWith('internal|')) {
             const taggedCategory = tag.replace('internal|', '').toLowerCase();
-            if (taggedCategory === normalizedCategory) results.push(text);
+            if (taggedCategory === normalizedCategory) results.push({ text, author: authorName });
           } else if (tag === 'internal' && singleCategory.toLowerCase() === normalizedCategory) {
-            results.push(text);
+            results.push({ text, author: authorName });
           }
           return;
         }
 
         if (singleCategory && singleCategory.toLowerCase() === normalizedCategory) {
-          results.push(block);
+          results.push({ text: block, author: authorName });
         }
       });
     });
@@ -971,11 +977,12 @@ const ResultsDashboard: React.FC<Props> = ({
                       <h4 className="font-semibold text-slate-800 mb-3">Comentarios sobre este empleado</h4>
                       {peerCommentsForEmployee.length > 0 ? (
                         <div className="space-y-3">
-                          {peerCommentsForEmployee.map((comment, index) => (
-                            <div key={`peer-comment-${index}`} className="border rounded-lg p-4 text-sm text-slate-700 bg-slate-50">
-                              {comment}
-                            </div>
-                          ))}
+                      {peerCommentsForEmployee.map((comment, index) => (
+                        <div key={`peer-comment-${index}`} className="border rounded-lg p-4 text-sm text-slate-700 bg-slate-50">
+                          <div className="text-xs font-semibold text-slate-500 mb-2">{comment.author}</div>
+                          {comment.text}
+                        </div>
+                      ))}
                         </div>
                       ) : (
                         <div className="text-sm text-slate-400 bg-slate-50 border border-dashed rounded-xl p-4 text-center">
@@ -985,59 +992,6 @@ const ResultsDashboard: React.FC<Props> = ({
                     </div>
                   </div>
                 )}
-                <div className="bg-white p-6 rounded-xl border">
-                  <div className="flex justify-between items-center mb-6">
-                    <h3 className="font-bold flex items-center gap-2"><BarChart3 size={20} /> Satisfacción interna</h3>
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-slate-500">{internalStats ? `${internalStats.totalEvaluations} evaluaciones` : 'Sin datos'}</span>
-                      {internalStats && (
-                        <button onClick={() => copyChartToClipboard(internalChartRef)} className="text-[var(--color-primary)] flex items-center gap-2 text-xs font-bold">
-                          <Copy size={14} /> Copiar Imagen
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  {internalStats ? (
-                    <div className="h-64" ref={internalChartRef}>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={internalStats.categories}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                          <XAxis dataKey="name" tick={false} />
-                          <YAxis domain={[0, 100]} tickFormatter={formatPercent} />
-                          <Tooltip content={renderScoreTooltip()} />
-                          <Bar dataKey="percent" radius={[4, 4, 0, 0]}>
-                            {internalStats.categories.map((_, index) => (
-                              <Cell key={`internal-emp-${index}`} fill={getPastelColor(index)} />
-                            ))}
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  ) : (
-                    <div className="text-sm text-slate-400 bg-slate-50 border border-dashed rounded-xl p-6 text-center">
-                      No hay evaluaciones internas registradas para este empleado.
-                    </div>
-                  )}
-                  <div className="mt-6">
-                    <h4 className="font-semibold text-slate-800 mb-3">Comentarios de satisfacción interna</h4>
-                    {internalCommentsForEmployee.length > 0 ? (
-                      <div className="space-y-3">
-                        {internalCommentsForEmployee.map((comment, index) => (
-                          <div key={`internal-comment-${index}`} className="border rounded-lg p-4 text-sm text-slate-700 bg-slate-50">
-                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-slate-200 text-slate-700 mb-2">
-                              {comment.category}
-                            </span>
-                            <div>{comment.text}</div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-sm text-slate-400 bg-slate-50 border border-dashed rounded-xl p-4 text-center">
-                        No hay comentarios internos registrados para este empleado.
-                      </div>
-                    )}
-                  </div>
-                </div>
                 {stats && (
                   <div className="bg-slate-900 rounded-xl p-6 text-white">
                     <div className="flex items-center justify-between mb-4">
@@ -1268,7 +1222,8 @@ const ResultsDashboard: React.FC<Props> = ({
                   {selectedInternalCategory && internalCategoryComments.length > 0 ? (
                     internalCategoryComments.map((comment, index) => (
                       <div key={`${selectedInternalCategory}-${index}`} className="border rounded-lg p-4 text-sm text-slate-700 bg-slate-50">
-                        {comment}
+                        <div className="text-xs font-semibold text-slate-500 mb-2">{comment.author}</div>
+                        {comment.text}
                       </div>
                     ))
                   ) : (

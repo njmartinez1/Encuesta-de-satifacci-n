@@ -293,7 +293,7 @@ using (
     id = (select auth.uid())
     or public.is_admin()
     or (
-      public.current_access_role() in ('viewer', 'principal')
+      public.current_access_role() in ('viewer', 'principal', 'reviewer')
       and public.current_user_campus() is not null
       and lower(trim(profiles.campus)) = lower(public.current_user_campus())
     )
@@ -362,7 +362,7 @@ using (
     public.is_admin()
     or evaluator_id = (select auth.uid())
     or (
-      public.current_access_role() in ('viewer', 'principal')
+      public.current_access_role() in ('viewer', 'principal', 'reviewer')
       and public.target_in_current_campus(assignments.target_id)
     )
   )
@@ -394,7 +394,7 @@ using (
     public.is_admin()
     or evaluator_id = (select auth.uid())
     or (
-      public.current_access_role() in ('viewer', 'principal')
+      public.current_access_role() in ('viewer', 'principal', 'reviewer')
       and public.current_user_campus() is not null
       and exists (
         select 1

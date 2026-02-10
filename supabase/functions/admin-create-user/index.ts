@@ -72,7 +72,8 @@ serve(async (req) => {
   const campus = (payload.campus ?? "").trim();
   const isAdmin = Boolean(payload.is_admin);
   const accessRoleInput = (payload.access_role ?? "").trim().toLowerCase();
-  const accessRole = accessRoleInput === "viewer" ? "viewer" : "educator";
+  const allowedAccessRoles = new Set(["educator", "viewer", "principal", "reviewer"]);
+  const accessRole = allowedAccessRoles.has(accessRoleInput) ? accessRoleInput : "educator";
 
   if (!email || !name || !role) {
     return new Response(JSON.stringify({ error: "Missing required fields." }), {
