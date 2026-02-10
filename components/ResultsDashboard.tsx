@@ -117,6 +117,37 @@ const ResultsDashboard: React.FC<Props> = ({
     return trimmed;
   };
 
+  const clampChannel = (value: number) => Math.min(255, Math.max(0, value));
+  const hexToRgb = (hex: string) => {
+    const cleaned = hex.replace('#', '');
+    if (cleaned.length !== 6) return null;
+    const r = Number.parseInt(cleaned.slice(0, 2), 16);
+    const g = Number.parseInt(cleaned.slice(2, 4), 16);
+    const b = Number.parseInt(cleaned.slice(4, 6), 16);
+    if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) return null;
+    return { r, g, b };
+  };
+  const rgbToHex = (r: number, g: number, b: number) => {
+    const toHex = (value: number) => clampChannel(Math.round(value)).toString(16).padStart(2, '0');
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+  };
+  const mixHex = (start: string, end: string, ratio: number) => {
+    const startRgb = hexToRgb(start);
+    const endRgb = hexToRgb(end);
+    if (!startRgb || !endRgb) return start;
+    const clamped = Math.min(1, Math.max(0, ratio));
+    const r = startRgb.r * (1 - clamped) + endRgb.r * clamped;
+    const g = startRgb.g * (1 - clamped) + endRgb.g * clamped;
+    const b = startRgb.b * (1 - clamped) + endRgb.b * clamped;
+    return rgbToHex(r, g, b);
+  };
+  const getScoreRingColor = (percent: number) => {
+    const lowColor = '#f6b4b4';
+    const highColor = '#40CCA1';
+    const ratio = percent / 100;
+    return mixHex(lowColor, highColor, ratio);
+  };
+
   const normalizeCampusValue = (value: string) => value
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -985,7 +1016,7 @@ const ResultsDashboard: React.FC<Props> = ({
                             startAngle={90}
                             endAngle={-270}
                           >
-                            <Cell fill="var(--color-primary)" />
+                            <Cell fill={getScoreRingColor(stats.overallPercent ?? 0)} />
                             <Cell fill="#e2e8f0" />
                           </Pie>
                         </PieChart>
