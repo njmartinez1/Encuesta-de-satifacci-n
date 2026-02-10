@@ -16,8 +16,10 @@ interface Props {
   hideEmployeeMatrix?: boolean;
   hideEmployeeTab?: boolean;
   hideGeneralExport?: boolean;
+  hideEmployeeExport?: boolean;
   canSelectCampus?: boolean;
   forcedCampus?: string | null;
+  showCommentAuthors?: boolean;
 }
 
 const ResultsDashboard: React.FC<Props> = ({
@@ -29,8 +31,10 @@ const ResultsDashboard: React.FC<Props> = ({
   hideEmployeeMatrix = false,
   hideEmployeeTab = false,
   hideGeneralExport = false,
+  hideEmployeeExport = false,
   canSelectCampus = false,
   forcedCampus = null,
+  showCommentAuthors = false,
 }) => {
   const { showAlert } = useModal();
   const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null);
@@ -65,6 +69,8 @@ const ResultsDashboard: React.FC<Props> = ({
   const internalQuestions = questions.filter(question => question.section === 'internal');
   const peerQuestionIds = new Set(peerQuestions.map(question => question.id));
   const internalQuestionIds = new Set(internalQuestions.map(question => question.id));
+  const makeAnonymityKey = (evaluatorId: string, periodId?: string | null) =>
+    `${evaluatorId}::${periodId ?? ''}`;
   const internalAnonymityByEvaluator = new Map<string, boolean>();
   evaluations.forEach(evaluation => {
     if (evaluation.evaluatorId !== evaluation.evaluatedId) return;
@@ -72,10 +78,15 @@ const ResultsDashboard: React.FC<Props> = ({
       internalQuestionIds.has(Number(questionId))
     );
     if (!hasInternalAnswer) return;
-    internalAnonymityByEvaluator.set(evaluation.evaluatorId, evaluation.isAnonymous);
+    internalAnonymityByEvaluator.set(
+      makeAnonymityKey(evaluation.evaluatorId, evaluation.periodId),
+      evaluation.isAnonymous
+    );
   });
   const resolveEvaluationAnonymity = (evaluation: Evaluation) =>
-    internalAnonymityByEvaluator.get(evaluation.evaluatorId) ?? evaluation.isAnonymous ?? false;
+    internalAnonymityByEvaluator.get(makeAnonymityKey(evaluation.evaluatorId, evaluation.periodId))
+    ?? evaluation.isAnonymous
+    ?? false;
   const normalizeOptionLabel = (value: string) => value
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -191,9 +202,7 @@ const ResultsDashboard: React.FC<Props> = ({
       const evaluator = employees.find(emp => emp.id === evaluation.evaluatorId)?.name || 'N/A';
       const evaluated = employees.find(emp => emp.id === evaluation.evaluatedId)?.name || 'N/A';
       const resolvedAnonymity = includeAnonymous
-        ? (isPeerExport
-          ? (internalAnonymityByEvaluator.get(evaluation.evaluatorId) ?? evaluation.isAnonymous)
-          : evaluation.isAnonymous)
+        ? (isPeerExport ? resolveEvaluationAnonymity(evaluation) : evaluation.isAnonymous)
         : false;
       const anonymity = includeAnonymous ? [resolvedAnonymity ? 'Si' : 'No'] : [];
       const answers = questionList.map((question) => {
@@ -949,12 +958,14 @@ const ResultsDashboard: React.FC<Props> = ({
                         )}
                       </div>
                       <div className="flex items-center gap-3">
-                        <button
-                          onClick={handleExportEmployeePeer}
-                          className="text-[var(--color-primary)] flex items-center gap-2 text-xs font-bold"
-                        >
-                          <Download size={14} /> Exportar CSV
-                        </button>
+                        {!hideEmployeeExport && (
+                          <button
+                            onClick={handleExportEmployeePeer}
+                            className="text-[var(--color-primary)] flex items-center gap-2 text-xs font-bold"
+                          >
+                            <Download size={14} /> Exportar CSV
+                          </button>
+                        )}
                         <button onClick={() => copyChartToClipboard(chartRef)} className="text-[var(--color-primary)] flex items-center gap-2 text-xs font-bold">
                           <Copy size={14} /> Copiar Imagen
                         </button>
@@ -981,7 +992,9 @@ const ResultsDashboard: React.FC<Props> = ({
                         <div className="space-y-3">
                       {peerCommentsForEmployee.map((comment, index) => (
                         <div key={`peer-comment-${index}`} className="border rounded-lg p-4 text-sm text-slate-700 bg-slate-50">
-                          <div className="text-xs font-semibold text-slate-500 mb-2">{comment.author}</div>
+                          {showCommentAuthors && (
+                            <div className="text-xs font-semibold text-slate-500 mb-2">{comment.author}</div>
+                          )}
                           {comment.text}
                         </div>
                       ))}
@@ -1224,7 +1237,9 @@ const ResultsDashboard: React.FC<Props> = ({
                   {selectedInternalCategory && internalCategoryComments.length > 0 ? (
                     internalCategoryComments.map((comment, index) => (
                       <div key={`${selectedInternalCategory}-${index}`} className="border rounded-lg p-4 text-sm text-slate-700 bg-slate-50">
-                        <div className="text-xs font-semibold text-slate-500 mb-2">{comment.author}</div>
+                        {showCommentAuthors && (
+                          <div className="text-xs font-semibold text-slate-500 mb-2">{comment.author}</div>
+                        )}
                         {comment.text}
                       </div>
                     ))

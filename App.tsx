@@ -1831,11 +1831,13 @@ const App: React.FC = () => {
               questions={questions}
               assignments={assignments}
               campus={currentUser?.campus ?? null}
-              hideEmployeeMatrix={isPrincipal}
+              hideEmployeeMatrix={isPrincipal || isReviewer}
               hideEmployeeTab={isPrincipal}
               hideGeneralExport={isPrincipal || isReviewer}
+              hideEmployeeExport={isReviewer}
               canSelectCampus={isAdmin}
               forcedCampus={isAdmin ? null : (currentUser?.campus ?? null)}
+              showCommentAuthors={isAdmin}
             />
           </div>
         )}
