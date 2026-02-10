@@ -97,6 +97,7 @@ const normalizeAccessRole = (value?: string | null): AccessRole => {
   const normalized = (value ?? '').trim().toLowerCase();
   if (normalized === 'viewer') return 'viewer';
   if (normalized === 'principal') return 'principal';
+  if (normalized === 'reviewer') return 'reviewer';
   if (normalized === 'educator') return 'educator';
   return 'educator';
 };
@@ -394,6 +395,7 @@ const App: React.FC = () => {
       const isAdmin = userProfile.isAdmin;
       const isViewer = userProfile.accessRole === 'viewer';
       const isPrincipal = userProfile.accessRole === 'principal';
+      const isReviewer = userProfile.accessRole === 'reviewer';
 
       const assignmentsQuery = supabase.from('assignments').select('evaluator_id, target_id');
       if (!isAdmin) assignmentsQuery.eq('evaluator_id', userProfile.id);
@@ -404,7 +406,9 @@ const App: React.FC = () => {
       const evaluationsQuery = supabase
         .from('evaluations')
         .select('evaluator_id, evaluated_id, period_id, answers, comments, is_anonymous, created_at');
-      if (!isAdmin && !isViewer && !isPrincipal) evaluationsQuery.eq('evaluator_id', userProfile.id);
+      if (!isAdmin && !isViewer && !isPrincipal && !isReviewer) {
+        evaluationsQuery.eq('evaluator_id', userProfile.id);
+      }
 
       const [
         profilesRes,
@@ -586,7 +590,8 @@ const App: React.FC = () => {
     if (!currentUser) return;
     const isViewer = !currentUser.isAdmin && currentUser.accessRole === 'viewer';
     const isPrincipal = !currentUser.isAdmin && currentUser.accessRole === 'principal';
-    const canViewResults = currentUser.isAdmin || isViewer || isPrincipal;
+    const isReviewer = !currentUser.isAdmin && currentUser.accessRole === 'reviewer';
+    const canViewResults = currentUser.isAdmin || isViewer || isPrincipal || isReviewer;
     const canViewSurvey = true;
     const isAllowedView = (
       (view === 'survey' && canViewSurvey)
@@ -594,7 +599,7 @@ const App: React.FC = () => {
       || ((view === 'admin' || view === 'questions') && currentUser.isAdmin)
     );
     if (!isAllowedView) {
-      setView(isViewer || isPrincipal ? 'results' : 'survey');
+      setView(isViewer || isPrincipal || isReviewer ? 'results' : 'survey');
     }
   }, [currentUser, view]);
 
@@ -1242,7 +1247,8 @@ const App: React.FC = () => {
   const accessRole = currentUser?.accessRole ?? 'educator';
   const isViewer = !isAdmin && accessRole === 'viewer';
   const isPrincipal = !isAdmin && accessRole === 'principal';
-  const canViewResults = isAdmin || isViewer || isPrincipal;
+  const isReviewer = !isAdmin && accessRole === 'reviewer';
+  const canViewResults = isAdmin || isViewer || isPrincipal || isReviewer;
   const canViewSurvey = true;
   const activePeriodId = activePeriod?.id ?? '';
   const hasActivePeriod = Boolean(activePeriodId);
@@ -1784,7 +1790,7 @@ const App: React.FC = () => {
               campus={currentUser?.campus ?? null}
               hideEmployeeMatrix={isPrincipal}
               hideEmployeeTab={isPrincipal}
-              hideGeneralExport={isPrincipal}
+              hideGeneralExport={isPrincipal || isReviewer}
               canSelectCampus={isAdmin}
               forcedCampus={isAdmin ? null : (currentUser?.campus ?? null)}
             />

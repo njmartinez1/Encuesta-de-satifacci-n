@@ -1,4 +1,4 @@
-export type AccessRole = 'educator' | 'viewer' | 'principal' | 'admin';
+export type AccessRole = 'educator' | 'viewer' | 'principal' | 'reviewer' | 'admin';
 
 export interface Employee {
   id: string;
