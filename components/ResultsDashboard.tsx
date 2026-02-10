@@ -74,6 +74,8 @@ const ResultsDashboard: React.FC<Props> = ({
     if (!hasInternalAnswer) return;
     internalAnonymityByEvaluator.set(evaluation.evaluatorId, evaluation.isAnonymous);
   });
+  const resolveEvaluationAnonymity = (evaluation: Evaluation) =>
+    internalAnonymityByEvaluator.get(evaluation.evaluatorId) ?? evaluation.isAnonymous ?? false;
   const normalizeOptionLabel = (value: string) => value
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -578,7 +580,7 @@ const ResultsDashboard: React.FC<Props> = ({
       if (!Object.keys(evalu.answers).some(qId => peerQuestionMap.has(parseInt(qId, 10)))) return;
       const commentText = (evalu.comments || '').trim();
       if (!commentText) return;
-      const authorName = evalu.isAnonymous
+      const authorName = resolveEvaluationAnonymity(evalu)
         ? 'Anónimo'
         : (employees.find(emp => emp.id === evalu.evaluatorId)?.name || 'N/A');
       splitCommentBlocks(commentText).forEach(block => {
@@ -653,7 +655,7 @@ const ResultsDashboard: React.FC<Props> = ({
       if (!Object.keys(evalu.answers).some(qId => questionIds.has(parseInt(qId, 10)))) return;
       const commentText = (evalu.comments || '').trim();
       if (!commentText) return;
-      const authorName = evalu.isAnonymous
+      const authorName = resolveEvaluationAnonymity(evalu)
         ? 'Anónimo'
         : (employees.find(emp => emp.id === evalu.evaluatorId)?.name || 'N/A');
 

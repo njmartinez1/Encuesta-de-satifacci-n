@@ -803,6 +803,19 @@ const App: React.FC = () => {
         ? (internalAnonymityPreference ?? existingEvaluation?.isAnonymous)
         : (internalAnonymityPreference ?? existingEvaluation?.isAnonymous ?? false)
     );
+    const applyGlobalAnonymity = internalAnonymityChoice !== null;
+
+    if (applyGlobalAnonymity) {
+      const { error: updateAnonymityError } = await supabase
+        .from('evaluations')
+        .update({ is_anonymous: resolvedAnonymity })
+        .eq('evaluator_id', evalData.evaluatorId)
+        .eq('period_id', periodId);
+      if (updateAnonymityError) {
+        showAlert('No se pudo actualizar el anonimato en todas las respuestas.');
+        return false;
+      }
+    }
 
     const { error } = await supabase
       .from('evaluations')
@@ -824,7 +837,14 @@ const App: React.FC = () => {
     }
 
     setEvaluations(prev => {
-      const filtered = prev.filter(e => !(
+      const updated = applyGlobalAnonymity
+        ? prev.map(e => (
+          e.evaluatorId === evalData.evaluatorId && e.periodId === periodId
+            ? { ...e, isAnonymous: resolvedAnonymity }
+            : e
+        ))
+        : prev;
+      const filtered = updated.filter(e => !(
         e.evaluatorId === evalData.evaluatorId
         && e.evaluatedId === evalData.evaluatedId
         && e.periodId === periodId
@@ -837,6 +857,9 @@ const App: React.FC = () => {
         isAnonymous: resolvedAnonymity,
       }];
     });
+    if (applyGlobalAnonymity) {
+      setInternalAnonymityChoice(null);
+    }
     setSelectedTargetId(null);
     if (selectedEvaluationSection === 'internal') {
       setSelectedInternalCategory(null);
