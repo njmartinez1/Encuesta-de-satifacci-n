@@ -1235,8 +1235,8 @@ const ResultsDashboard: React.FC<Props> = ({
                         )}
                         <button
                           onClick={async () => {
-                            const ok = await copyChartToClipboard(chartRef);
-                            if (ok) triggerCopied('employee-chart');
+                            triggerCopied('employee-chart');
+                            await copyChartToClipboard(chartRef);
                           }}
                           className="text-[var(--color-primary)] flex items-center gap-2 text-xs font-bold focus:outline-none focus-visible:outline-none"
                         >
@@ -1339,8 +1339,8 @@ const ResultsDashboard: React.FC<Props> = ({
                     {overallPeerQuestionStats && (
                       <button
                         onClick={async () => {
-                          const ok = await copyChartToClipboard(overallPeerChartRef);
-                          if (ok) triggerCopied('overall-peer');
+                          triggerCopied('overall-peer');
+                          await copyChartToClipboard(overallPeerChartRef);
                         }}
                         className="text-[var(--color-primary)] flex items-center gap-2 text-xs font-bold focus:outline-none focus-visible:outline-none"
                       >
@@ -1393,8 +1393,8 @@ const ResultsDashboard: React.FC<Props> = ({
                     {overallInternalStats && (
                       <button
                         onClick={async () => {
-                          const ok = await copyChartToClipboard(overallInternalChartRef);
-                          if (ok) triggerCopied('overall-internal');
+                          triggerCopied('overall-internal');
+                          await copyChartToClipboard(overallInternalChartRef);
                         }}
                         className="text-[var(--color-primary)] flex items-center gap-2 text-xs font-bold focus:outline-none focus-visible:outline-none"
                       >
@@ -1541,7 +1541,7 @@ const ResultsDashboard: React.FC<Props> = ({
                               </span>
                             </button>
                             <div
-                              className={`overflow-hidden transition-all duration-300 ease-out ${isExpanded ? 'max-h-72 opacity-100 translate-y-0 mt-3' : 'max-h-0 opacity-0 -translate-y-1'}`}
+                              className={`overflow-hidden transition-all duration-300 ease-out ${isExpanded ? 'max-h-[1000px] opacity-100 translate-y-0 mt-3' : 'max-h-0 opacity-0 -translate-y-1'}`}
                             >
                               {distribution && distribution.total > 0 ? (
                                 <div className="bg-white border rounded-lg p-4">
@@ -1550,17 +1550,17 @@ const ResultsDashboard: React.FC<Props> = ({
                                     <button
                                       type="button"
                                       onClick={async () => {
-                                        const ok = await copyElementToClipboard(internalQuestionCardRefs.current[item.id] ?? null);
-                                        if (ok) triggerCopied(`internal-question-${item.id}`);
+                                        triggerCopied(`internal-question-${item.id}`);
+                                        await copyElementToClipboard(internalQuestionCardRefs.current[item.id] ?? null);
                                       }}
                                       className="text-[var(--color-primary)] flex items-center gap-2 text-xs font-bold focus:outline-none focus-visible:outline-none"
                                     >
                                       <Copy size={14} /> {copiedKey === `internal-question-${item.id}` ? 'Copiado' : 'Copiar imagen'}
                                     </button>
                                   </div>
-                                  <div ref={setCardRef} className="grid grid-cols-1 md:grid-cols-[160px,1fr] gap-4 items-center">
+                                  <div ref={setCardRef} className="grid grid-cols-1 md:grid-cols-[160px,1fr] gap-4 items-center min-w-0">
                                     <div
-                                      className="h-36 select-none outline-none"
+                                      className="h-40 md:h-36 select-none outline-none"
                                       onMouseDown={(event) => event.preventDefault()}
                                     >
                                       <ResponsiveContainer width="100%" height="100%">
@@ -1594,12 +1594,12 @@ const ResultsDashboard: React.FC<Props> = ({
                                         </PieChart>
                                       </ResponsiveContainer>
                                     </div>
-                                    <div className="space-y-2 text-xs text-slate-600">
+                                    <div className="space-y-2 text-xs text-slate-600 min-w-0">
                                       {distribution.data.map(entry => (
                                         <div key={`${item.id}-${entry.name}`} className="flex items-center justify-between gap-3">
-                                          <div className="flex items-center gap-2">
+                                          <div className="flex items-center gap-2 min-w-0 flex-1">
                                             <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
-                                            <span>{entry.name}</span>
+                                            <span className="truncate">{entry.name}</span>
                                           </div>
                                           <span className="font-semibold">{entry.count} ({entry.percent}%)</span>
                                         </div>
