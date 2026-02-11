@@ -99,38 +99,76 @@ const ResultsDashboard: React.FC<Props> = ({
   ];
   const isNonScoringOptionLabel = (label: string) =>
     NON_SCORING_OPTION_LABELS.some(term => normalizeOptionLabel(label).includes(term));
-  const SCALE_RESPONSE_OPTIONS = [
-    { key: 'strong_disagree', label: 'Completamente en desacuerdo', value: -1, color: '#fecaca' },
-    { key: 'disagree', label: 'En desacuerdo', value: -0.75, color: '#fde68a' },
-    { key: 'agree', label: 'De acuerdo', value: 0.75, color: '#a7f3d0' },
-    { key: 'strong_agree', label: 'Completamente de acuerdo', value: 1, color: '#bbf7d0' },
+  const DEFAULT_SCALE_OPTIONS = [
+    'Totalmente en desacuerdo',
+    'En desacuerdo',
+    'De acuerdo',
+    'Totalmente de acuerdo',
   ];
-  const SCALE_LABEL_TO_KEY: Record<string, string> = {
-    'totalmente en desacuerdo': 'strong_disagree',
-    'completamente en desacuerdo': 'strong_disagree',
-    'en desacuerdo': 'disagree',
-    'de acuerdo': 'agree',
-    'totalmente de acuerdo': 'strong_agree',
-    'completamente de acuerdo': 'strong_agree',
+  const SCALE_LABEL_VALUES: Record<string, number> = {
+    'totalmente en desacuerdo': -1,
+    'completamente en desacuerdo': -1,
+    'en desacuerdo': -0.75,
+    'de acuerdo': 0.75,
+    'totalmente de acuerdo': 1,
+    'completamente de acuerdo': 1,
   };
-  const getScaleKeyFromValue = (value: number) => {
-    const normalized = value === 1 ? -1
-      : value === 2 ? -0.75
-      : value === 3 ? 0.75
-      : value === 4 ? 1
-      : value;
-    const match = SCALE_RESPONSE_OPTIONS.find(option => option.value === normalized);
-    return match?.key ?? null;
+  const getQuestionOptionLabels = (question: Question) => {
+    if (question.options && question.options.length > 0) {
+      return question.options;
+    }
+    if (isZeroToTenQuestion(question)) {
+      return Array.from({ length: 10 }, (_, index) => String(index + 1));
+    }
+    return DEFAULT_SCALE_OPTIONS;
   };
-  const getScaleKeyForAnswer = (question: Question, answer: number | string | undefined) => {
+  const getScoreForOption = (options: string[], optionIndex: number) => {
+    const label = options[optionIndex] || '';
+    if (isNonScoringOptionLabel(label)) return null;
+    const normalized = normalizeOptionLabel(label);
+    const mapped = SCALE_LABEL_VALUES[normalized];
+    if (typeof mapped === 'number') return mapped;
+    const scoringOptions = options.filter(option => !isNonScoringOptionLabel(option));
+    if (scoringOptions.length === DEFAULT_SCALE_SCORE_VALUES.length) {
+      const scoringIndex = options
+        .slice(0, optionIndex)
+        .filter(option => !isNonScoringOptionLabel(option)).length;
+      return DEFAULT_SCALE_SCORE_VALUES[scoringIndex] ?? null;
+    }
+    return getScaleScore(optionIndex, options.length);
+  };
+  const getLabelForNumericAnswer = (question: Question, value: number) => {
+    const options = getQuestionOptionLabels(question);
+    if (isZeroToTenQuestion(question)) {
+      const normalized = normalizeZeroToTenValue(value, question);
+      const index = normalized - 1;
+      return options[index] ?? String(normalized);
+    }
+    if (options.length > 0) {
+      for (let i = 0; i < options.length; i += 1) {
+        const score = getScoreForOption(options, i);
+        if (score === null) continue;
+        if (score === value) return options[i];
+      }
+    }
+    const fallbackIndex = DEFAULT_SCALE_SCORE_VALUES.findIndex(score => score === value);
+    if (fallbackIndex >= 0) return DEFAULT_SCALE_OPTIONS[fallbackIndex];
+    return String(value);
+  };
+  const getLabelForAnswer = (question: Question, answer: number | string | undefined) => {
     if (answer === undefined || answer === null) return null;
     if (typeof answer === 'string') {
-      if (isNonScoringOptionLabel(answer)) return null;
       const normalized = normalizeOptionLabel(answer);
-      return SCALE_LABEL_TO_KEY[normalized] ?? null;
+      const options = getQuestionOptionLabels(question);
+      const match = options.find(option => normalizeOptionLabel(option) === normalized);
+      return match ?? answer;
     }
-    if (isNonScoringAnswer(question, answer)) return null;
-    return getScaleKeyFromValue(answer);
+    if (isNonScoringAnswer(question, answer)) {
+      const options = getQuestionOptionLabels(question);
+      const index = options.findIndex(option => isNonScoringOptionLabel(option));
+      return index >= 0 ? options[index] : null;
+    }
+    return getLabelForNumericAnswer(question, answer);
   };
   const isNonScoringAnswer = (question: Question, score: number) => {
     if (!question.options || question.options.length === 0) return false;
@@ -863,26 +901,27 @@ const ResultsDashboard: React.FC<Props> = ({
   const getInternalQuestionDistribution = (questionId: number) => {
     const question = internalQuestionMap.get(questionId);
     if (!question) return null;
-    const counts: Record<string, number> = {};
-    SCALE_RESPONSE_OPTIONS.forEach(option => { counts[option.key] = 0; });
+    const labels = getQuestionOptionLabels(question);
+    const counts = new Map<string, number>();
+    labels.forEach(label => counts.set(label, 0));
     let total = 0;
 
     filteredEvaluations.forEach(evaluation => {
       const answer = evaluation.answers[questionId];
-      const key = getScaleKeyForAnswer(question, answer);
-      if (!key) return;
-      counts[key] += 1;
+      const label = getLabelForAnswer(question, answer);
+      if (!label) return;
+      counts.set(label, (counts.get(label) || 0) + 1);
       total += 1;
     });
 
-    const data = SCALE_RESPONSE_OPTIONS.map(option => {
-      const count = counts[option.key] || 0;
+    const data = labels.map((label, index) => {
+      const count = counts.get(label) || 0;
       const percent = total > 0 ? Math.round((count / total) * 100) : 0;
       return {
-        name: option.label,
+        name: label,
         count,
         percent,
-        color: option.color,
+        color: getPastelColor(index),
       };
     });
 
@@ -1454,7 +1493,7 @@ const ResultsDashboard: React.FC<Props> = ({
                                         </div>
                                       ))}
                                       <div className="pt-2 text-[11px] text-slate-500">
-                                        Total respuestas vÃ¡lidas: {distribution.total}
+                                        Total respuestas: {distribution.total}
                                       </div>
                                     </div>
                                   </div>
