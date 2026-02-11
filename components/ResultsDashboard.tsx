@@ -404,6 +404,31 @@ const ResultsDashboard: React.FC<Props> = ({
     if (!question.options || question.options.length === 0) return false;
     return question.options.length !== DEFAULT_SCALE_SCORE_VALUES.length;
   };
+  const AXIS_STOP_WORDS = new Set([
+    'de', 'del', 'la', 'el', 'los', 'las', 'y', 'o', 'para', 'por', 'en', 'con', 'al', 'a',
+  ]);
+  const buildAxisAbbreviations = (labels: string[]) => {
+    const raw = labels.map(label => {
+      const words = label.split(/\s+/).filter(Boolean);
+      const filtered = words.filter(word => !AXIS_STOP_WORDS.has(word.toLowerCase()));
+      const source = filtered.length > 0 ? filtered : words;
+      const initials = source.map(word => word[0]?.toUpperCase()).join('');
+      const base = initials.slice(0, 3);
+      if (base.length >= 2) return base;
+      return label.trim().slice(0, 2).toUpperCase();
+    });
+    const counts = new Map<string, number>();
+    return labels.reduce<Record<string, string>>((acc, label, index) => {
+      let abbr = raw[index];
+      const seen = counts.get(abbr) ?? 0;
+      counts.set(abbr, seen + 1);
+      if (seen > 0) {
+        abbr = `${abbr}${seen + 1}`;
+      }
+      acc[label] = abbr;
+      return acc;
+    }, {});
+  };
 
   const normalizeZeroToTenValue = (value: number, question: Question) => {
     if (question.options && question.options.length === 11) {
@@ -922,6 +947,12 @@ const ResultsDashboard: React.FC<Props> = ({
   const internalStats = selectedEmp ? getInternalStats(selectedEmp.id) : null;
   const overallPeerQuestionStats = getQuestionStats(peerQuestionMap);
   const overallInternalStats = getAggregateStats(internalQuestionMap);
+  const overallPeerAxisLabels = buildAxisAbbreviations(
+    overallPeerQuestionStats ? overallPeerQuestionStats.questions.map(item => item.name) : []
+  );
+  const overallInternalAxisLabels = buildAxisAbbreviations(
+    overallInternalStats ? overallInternalStats.categories.map(item => item.name) : []
+  );
   const internalCategoryComments = getCommentsForCategory(selectedInternalCategory, internalQuestionMap);
   const internalCategoryQuestionTotals = getQuestionTotalsForCategory(selectedInternalCategory);
   const peerCommentsForEmployee = selectedEmp ? getPeerCommentsForEmployee(selectedEmp.id) : [];
@@ -1143,7 +1174,12 @@ const ResultsDashboard: React.FC<Props> = ({
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={overallPeerQuestionStats.questions}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                      <XAxis dataKey="name" tick={false} />
+                      <XAxis
+                        dataKey="name"
+                        interval={0}
+                        tick={{ fontSize: 10 }}
+                        tickFormatter={(value) => overallPeerAxisLabels[String(value)] ?? String(value)}
+                      />
                       <YAxis domain={[0, 100]} tickFormatter={formatPercent} />
                       <Tooltip content={renderScoreTooltip()} />
                       <Bar dataKey="percent" radius={[4, 4, 0, 0]}>
@@ -1186,7 +1222,12 @@ const ResultsDashboard: React.FC<Props> = ({
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={overallInternalStats.categories} onClick={handleOverallInternalChartClick}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                      <XAxis dataKey="name" tick={false} />
+                      <XAxis
+                        dataKey="name"
+                        interval={0}
+                        tick={{ fontSize: 10 }}
+                        tickFormatter={(value) => overallInternalAxisLabels[String(value)] ?? String(value)}
+                      />
                       <YAxis domain={[0, 100]} tickFormatter={formatPercent} />
                       <Tooltip content={renderScoreTooltip()} />
                       <Bar
