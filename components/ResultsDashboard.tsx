@@ -1525,6 +1525,7 @@ const ResultsDashboard: React.FC<Props> = ({
                       {internalCategoryQuestionTotals.map(item => {
                         const isExpanded = expandedInternalQuestionId === item.id;
                         const distribution = isExpanded ? getInternalQuestionDistribution(item.id) : null;
+                        const useBarChart = distribution ? distribution.data.length > 5 : false;
                         const setCardRef = (node: HTMLDivElement | null) => {
                           internalQuestionCardRefs.current[item.id] = node;
                         };
@@ -1564,38 +1565,60 @@ const ResultsDashboard: React.FC<Props> = ({
                                   </div>
                                   <div className="grid grid-cols-1 md:grid-cols-[160px,1fr] gap-4 items-center min-w-0">
                                     <div
-                                      className="h-40 md:h-36 select-none outline-none"
+                                      className={`select-none outline-none ${useBarChart ? 'h-44 md:h-40' : 'h-40 md:h-36'}`}
                                       onMouseDown={(event) => event.preventDefault()}
                                     >
                                       <ResponsiveContainer width="100%" height="100%">
-                                        <PieChart
-                                          margin={{ top: 8, right: 8, bottom: 8, left: 8 }}
-                                          style={{ outline: 'none' }}
-                                          className="outline-none"
-                                          tabIndex={-1}
-                                        >
-                                          <Pie
+                                        {useBarChart ? (
+                                          <BarChart
                                             data={distribution.data}
-                                            dataKey="count"
-                                            nameKey="name"
-                                            innerRadius={36}
-                                            outerRadius={52}
-                                            paddingAngle={2}
-                                            cx="50%"
-                                            cy="50%"
-                                            isAnimationActive={false}
+                                            margin={{ top: 8, right: 8, bottom: 16, left: 0 }}
                                           >
-                                            {distribution.data.map((entry, index) => (
-                                              <Cell key={`dist-${item.id}-${index}`} fill={entry.color} />
-                                            ))}
-                                          </Pie>
-                                          <Tooltip
-                                            formatter={(value: number, _name, props: { payload?: { percent?: number } }) => {
-                                              const pct = props?.payload?.percent ?? 0;
-                                              return [`${value} (${pct}%)`, 'Respuestas'];
-                                            }}
-                                          />
-                                        </PieChart>
+                                            <CartesianGrid strokeDasharray="3 3" />
+                                            <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} />
+                                            <YAxis allowDecimals={false} tick={{ fontSize: 10 }} />
+                                            <Tooltip
+                                              formatter={(value: number, _name, props: { payload?: { percent?: number } }) => {
+                                                const pct = props?.payload?.percent ?? 0;
+                                                return [`${value} (${pct}%)`, 'Respuestas'];
+                                              }}
+                                            />
+                                            <Bar dataKey="count" radius={[4, 4, 0, 0]} isAnimationActive={false}>
+                                              {distribution.data.map((entry, index) => (
+                                                <Cell key={`dist-${item.id}-${index}`} fill={entry.color} />
+                                              ))}
+                                            </Bar>
+                                          </BarChart>
+                                        ) : (
+                                          <PieChart
+                                            margin={{ top: 8, right: 8, bottom: 8, left: 8 }}
+                                            style={{ outline: 'none' }}
+                                            className="outline-none"
+                                            tabIndex={-1}
+                                          >
+                                            <Pie
+                                              data={distribution.data}
+                                              dataKey="count"
+                                              nameKey="name"
+                                              innerRadius={36}
+                                              outerRadius={52}
+                                              paddingAngle={2}
+                                              cx="50%"
+                                              cy="50%"
+                                              isAnimationActive={false}
+                                            >
+                                              {distribution.data.map((entry, index) => (
+                                                <Cell key={`dist-${item.id}-${index}`} fill={entry.color} />
+                                              ))}
+                                            </Pie>
+                                            <Tooltip
+                                              formatter={(value: number, _name, props: { payload?: { percent?: number } }) => {
+                                                const pct = props?.payload?.percent ?? 0;
+                                                return [`${value} (${pct}%)`, 'Respuestas'];
+                                              }}
+                                            />
+                                          </PieChart>
+                                        )}
                                       </ResponsiveContainer>
                                     </div>
                                     <div className="space-y-2 text-xs text-slate-600 min-w-0">
