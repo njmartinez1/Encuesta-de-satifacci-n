@@ -1,4 +1,4 @@
-
+﻿
 import React, { useState, useEffect, useRef } from 'react';
 import { Assignment, Evaluation, Employee, Question } from '../types.ts';
 import { DEFAULT_SCALE_SCORE_VALUES, getScaleRangeFromCount, getScorePercentage, getScaleScore } from '../scoreUtils.ts';
@@ -49,11 +49,13 @@ const ResultsDashboard: React.FC<Props> = ({
   const [aiAnalysis, setAiAnalysis] = useState<string>('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [expandedInternalQuestionId, setExpandedInternalQuestionId] = useState<number | null>(null);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const chartRef = useRef<HTMLDivElement>(null);
   const internalChartRef = useRef<HTMLDivElement>(null);
   const overallPeerChartRef = useRef<HTMLDivElement>(null);
   const overallInternalChartRef = useRef<HTMLDivElement>(null);
   const internalQuestionCardRefs = useRef<Record<number, HTMLDivElement | null>>({});
+  const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const peerQuestionMap = new Map(
     questions
       .filter(question => question.section === 'peer')
@@ -405,7 +407,7 @@ const ResultsDashboard: React.FC<Props> = ({
       : filteredEvaluations.filter(evaluation => filteredEmployeeIds.has(evaluation.evaluatedId));
     const relevant = filterEvaluationsByQuestions(peerQuestionIds, exportBase);
     exportCsv(
-      buildFilename('desempeño_general'),
+      buildFilename('desempeÃ±o_general'),
       relevant,
       peerQuestions,
       'No hay evaluaciones de pares registradas.',
@@ -416,7 +418,7 @@ const ResultsDashboard: React.FC<Props> = ({
   const handleExportGeneralInternal = () => {
     const relevant = filterEvaluationsByQuestions(internalQuestionIds);
     exportCsv(
-      buildFilename('satisfacción_interna'),
+      buildFilename('satisfacciÃ³n_interna'),
       relevant,
       internalQuestions,
       'No hay evaluaciones internas registradas.',
@@ -755,7 +757,7 @@ const ResultsDashboard: React.FC<Props> = ({
       const commentText = (evalu.comments || '').trim();
       if (!commentText) return;
       const authorName = resolveEvaluationAnonymity(evalu)
-        ? 'Anónimo'
+        ? 'AnÃ³nimo'
         : (employees.find(emp => emp.id === evalu.evaluatorId)?.name || 'N/A');
       splitCommentBlocks(commentText).forEach(block => {
         const tagged = parseTaggedBlock(block);
@@ -830,7 +832,7 @@ const ResultsDashboard: React.FC<Props> = ({
       const commentText = (evalu.comments || '').trim();
       if (!commentText) return;
       const authorName = resolveEvaluationAnonymity(evalu)
-        ? 'Anónimo'
+        ? 'AnÃ³nimo'
         : (employees.find(emp => emp.id === evalu.evaluatorId)?.name || 'N/A');
 
       const categoriesInEvaluation = new Set<string>();
@@ -980,65 +982,109 @@ const ResultsDashboard: React.FC<Props> = ({
     setIsAnalyzing(false);
   };
 
+  const COPY_SCALE = 2;
+  const COPY_PADDING = 24;
+  const triggerCopied = (key: string) => {
+    setCopiedKey(key);
+    if (copiedTimeoutRef.current) {
+      clearTimeout(copiedTimeoutRef.current);
+    }
+    copiedTimeoutRef.current = setTimeout(() => {
+      setCopiedKey(null);
+      copiedTimeoutRef.current = null;
+    }, 2000);
+  };
   const copyChartToClipboard = async (containerRef: React.RefObject<HTMLDivElement>) => {
-    if (!containerRef.current) return;
+    if (!containerRef.current) return false;
     const svg = containerRef.current.querySelector('svg');
-    if (!svg) return;
+    if (!svg) return false;
     if (!navigator.clipboard || typeof ClipboardItem === 'undefined') {
       showAlert('Tu navegador no permite copiar imágenes al portapapeles.');
-      return;
+      return false;
     }
     const svgData = new XMLSerializer().serializeToString(svg);
     const canvas = document.createElement('canvas');
     const img = new Image();
     const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
     const url = URL.createObjectURL(svgBlob);
-    img.onload = async () => {
-      canvas.width = img.width * 2;
-      canvas.height = img.height * 2;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.scale(2, 2);
-        ctx.fillStyle = 'white';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0);
-        const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
-        if (blob) {
-          try {
-            await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-          } catch (error) {
-            showAlert('No se pudo copiar la imagen.');
+    return new Promise<boolean>((resolve) => {
+      img.onload = async () => {
+        canvas.width = img.width * COPY_SCALE + COPY_PADDING * 2 * COPY_SCALE;
+        canvas.height = img.height * COPY_SCALE + COPY_PADDING * 2 * COPY_SCALE;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.scale(COPY_SCALE, COPY_SCALE);
+          ctx.fillStyle = 'white';
+          ctx.fillRect(0, 0, canvas.width / COPY_SCALE, canvas.height / COPY_SCALE);
+          ctx.drawImage(img, COPY_PADDING, COPY_PADDING);
+          const blob = await new Promise<Blob | null>((resolveBlob) => canvas.toBlob(resolveBlob, 'image/png'));
+          if (blob) {
+            try {
+              await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+              resolve(true);
+            } catch (error) {
+              showAlert('No se pudo copiar la imagen.');
+              resolve(false);
+            }
+          } else {
+            showAlert('No se pudo generar la imagen.');
+            resolve(false);
           }
         } else {
-          showAlert('No se pudo generar la imagen.');
+          resolve(false);
         }
-      }
-      URL.revokeObjectURL(url);
-    };
-    img.src = url;
+        URL.revokeObjectURL(url);
+      };
+      img.onerror = () => {
+        showAlert('No se pudo generar la imagen.');
+        URL.revokeObjectURL(url);
+        resolve(false);
+      };
+      img.src = url;
+    });
   };
   const copyElementToClipboard = async (element: HTMLElement | null) => {
-    if (!element) return;
+    if (!element) return false;
     if (!navigator.clipboard || typeof ClipboardItem === 'undefined') {
-      showAlert('Tu navegador no permite copiar imÃ¡genes al portapapeles.');
-      return;
+      showAlert('Tu navegador no permite copiar imágenes al portapapeles.');
+      return false;
     }
     try {
       const module = await import('html2canvas');
       const html2canvas = module.default;
-      const canvas = await html2canvas(element, { backgroundColor: '#ffffff', scale: 2 });
-      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+      const canvas = await html2canvas(element, { backgroundColor: '#ffffff', scale: COPY_SCALE });
+      const paddedCanvas = document.createElement('canvas');
+      const padding = COPY_PADDING * COPY_SCALE;
+      paddedCanvas.width = canvas.width + padding * 2;
+      paddedCanvas.height = canvas.height + padding * 2;
+      const ctx = paddedCanvas.getContext('2d');
+      if (!ctx) {
+        showAlert('No se pudo generar la imagen.');
+        return false;
+      }
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, paddedCanvas.width, paddedCanvas.height);
+      ctx.drawImage(canvas, padding, padding);
+      const blob = await new Promise<Blob | null>((resolveBlob) => paddedCanvas.toBlob(resolveBlob, 'image/png'));
       if (!blob) {
         showAlert('No se pudo generar la imagen.');
-        return;
+        return false;
       }
       await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      return true;
     } catch (error) {
       showAlert('No se pudo copiar la imagen.');
+      return false;
     }
   };
 
   useEffect(() => { setAiAnalysis(''); }, [selectedEmp]);
+  useEffect(() => () => {
+    if (copiedTimeoutRef.current) {
+      clearTimeout(copiedTimeoutRef.current);
+      copiedTimeoutRef.current = null;
+    }
+  }, []);
   useEffect(() => {
     if (hideEmployeeTab && viewMode === 'employee') {
       setViewMode('general');
@@ -1187,8 +1233,14 @@ const ResultsDashboard: React.FC<Props> = ({
                             <Download size={14} /> Exportar CSV
                           </button>
                         )}
-                        <button onClick={() => copyChartToClipboard(chartRef)} className="text-[var(--color-primary)] flex items-center gap-2 text-xs font-bold">
-                          <Copy size={14} /> Copiar Imagen
+                        <button
+                          onClick={async () => {
+                            const ok = await copyChartToClipboard(chartRef);
+                            if (ok) triggerCopied('employee-chart');
+                          }}
+                          className="text-[var(--color-primary)] flex items-center gap-2 text-xs font-bold focus:outline-none focus-visible:outline-none"
+                        >
+                          <Copy size={14} /> {copiedKey === 'employee-chart' ? 'Copiado' : 'Copiar imagen'}
                         </button>
                       </div>
                     </div>
@@ -1216,7 +1268,7 @@ const ResultsDashboard: React.FC<Props> = ({
                         <div className="text-3xl font-bold text-slate-800">
                           {stats.overallPercent ?? 0}%
                         </div>
-                        <div className="text-xs font-semibold text-slate-500">Calificación general</div>
+                        <div className="text-xs font-semibold text-slate-500">CalificaciÃ³n general</div>
                       </div>
                     </div>
                     <div className="mt-6">
@@ -1243,7 +1295,7 @@ const ResultsDashboard: React.FC<Props> = ({
                 {stats && (
                   <div className="bg-slate-900 rounded-xl p-6 text-white">
                     <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-xl font-bold flex items-center gap-2"><Sparkles size={24} className="text-[var(--color-primary)]" /> Análisis IA</h3>
+                      <h3 className="text-xl font-bold flex items-center gap-2"><Sparkles size={24} className="text-[var(--color-primary)]" /> AnÃ¡lisis IA</h3>
                       <button onClick={handleAIAnalysis} disabled={isAnalyzing} className="bg-[var(--color-primary)] px-4 py-2 rounded-lg text-sm font-bold disabled:opacity-50">
                         {isAnalyzing ? 'Analizando...' : 'Analizar'}
                       </button>
@@ -1272,7 +1324,7 @@ const ResultsDashboard: React.FC<Props> = ({
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div>
                 <div className="flex items-center justify-between mb-4">
-                  <h4 className="font-semibold text-slate-800">Desempeño general</h4>
+                  <h4 className="font-semibold text-slate-800">DesempeÃ±o general</h4>
                   <div className="flex items-center gap-3">
                     <span className="text-xs text-slate-500">{overallPeerQuestionStats ? `${overallPeerQuestionStats.totalEvaluations} evaluaciones` : 'Sin datos'}</span>
                     {!hideGeneralExport && (
@@ -1285,8 +1337,14 @@ const ResultsDashboard: React.FC<Props> = ({
                       </button>
                     )}
                     {overallPeerQuestionStats && (
-                      <button onClick={() => copyChartToClipboard(overallPeerChartRef)} className="text-[var(--color-primary)] flex items-center gap-2 text-xs font-bold">
-                        <Copy size={14} /> Copiar Imagen
+                      <button
+                        onClick={async () => {
+                          const ok = await copyChartToClipboard(overallPeerChartRef);
+                          if (ok) triggerCopied('overall-peer');
+                        }}
+                        className="text-[var(--color-primary)] flex items-center gap-2 text-xs font-bold focus:outline-none focus-visible:outline-none"
+                      >
+                        <Copy size={14} /> {copiedKey === 'overall-peer' ? 'Copiado' : 'Copiar imagen'}
                       </button>
                     )}
                   </div>
@@ -1314,13 +1372,13 @@ const ResultsDashboard: React.FC<Props> = ({
                   </div>
                 ) : (
                   <div className="text-sm text-slate-400 bg-slate-50 border border-dashed rounded-xl p-6 text-center">
-                    No hay evaluaciones de desempeño registradas.
+                    No hay evaluaciones de desempeÃ±o registradas.
                   </div>
                 )}
               </div>
               <div>
                 <div className="flex items-center justify-between mb-4">
-                  <h4 className="font-semibold text-slate-800">Satisfacción interna (global)</h4>
+                  <h4 className="font-semibold text-slate-800">SatisfacciÃ³n interna (global)</h4>
                   <div className="flex items-center gap-3">
                     <span className="text-xs text-slate-500">{overallInternalStats ? `${overallInternalStats.totalEvaluations} evaluaciones` : 'Sin datos'}</span>
                     {!hideGeneralExport && (
@@ -1333,8 +1391,14 @@ const ResultsDashboard: React.FC<Props> = ({
                       </button>
                     )}
                     {overallInternalStats && (
-                      <button onClick={() => copyChartToClipboard(overallInternalChartRef)} className="text-[var(--color-primary)] flex items-center gap-2 text-xs font-bold">
-                        <Copy size={14} /> Copiar Imagen
+                      <button
+                        onClick={async () => {
+                          const ok = await copyChartToClipboard(overallInternalChartRef);
+                          if (ok) triggerCopied('overall-internal');
+                        }}
+                        className="text-[var(--color-primary)] flex items-center gap-2 text-xs font-bold focus:outline-none focus-visible:outline-none"
+                      >
+                        <Copy size={14} /> {copiedKey === 'overall-internal' ? 'Copiado' : 'Copiar imagen'}
                       </button>
                     )}
                   </div>
@@ -1447,10 +1511,10 @@ const ResultsDashboard: React.FC<Props> = ({
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
                 <h3 className="font-bold text-slate-800">Preguntas y porcentaje</h3>
-                <p className="text-sm text-slate-500">Selecciona una barra en la gráfica para ver el detalle de la sección.</p>
+                <p className="text-sm text-slate-500">Selecciona una barra en la grÃ¡fica para ver el detalle de la secciÃ³n.</p>
               </div>
               <span className="inline-flex items-center px-3 py-2 rounded-full text-sm font-semibold bg-slate-100 text-slate-700">
-                {selectedInternalCategory || 'Sin categoría'}
+                {selectedInternalCategory || 'Sin categorÃ­a'}
               </span>
             </div>
             <div className="mt-6 space-y-6">
@@ -1485,19 +1549,27 @@ const ResultsDashboard: React.FC<Props> = ({
                                     <span className="text-xs font-semibold text-slate-500">Detalle de respuestas</span>
                                     <button
                                       type="button"
-                                      onClick={() => copyElementToClipboard(internalQuestionCardRefs.current[item.id] ?? null)}
+                                      onClick={async () => {
+                                        const ok = await copyElementToClipboard(internalQuestionCardRefs.current[item.id] ?? null);
+                                        if (ok) triggerCopied(`internal-question-${item.id}`);
+                                      }}
                                       className="text-[var(--color-primary)] flex items-center gap-2 text-xs font-bold focus:outline-none focus-visible:outline-none"
                                     >
-                                      <Copy size={14} /> Copiar imagen
+                                      <Copy size={14} /> {copiedKey === `internal-question-${item.id}` ? 'Copiado' : 'Copiar imagen'}
                                     </button>
                                   </div>
                                   <div ref={setCardRef} className="grid grid-cols-1 md:grid-cols-[160px,1fr] gap-4 items-center">
                                     <div
-                                      className="h-36 select-none"
+                                      className="h-36 select-none outline-none"
                                       onMouseDown={(event) => event.preventDefault()}
                                     >
                                       <ResponsiveContainer width="100%" height="100%">
-                                        <PieChart margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+                                        <PieChart
+                                          margin={{ top: 8, right: 8, bottom: 8, left: 8 }}
+                                          style={{ outline: 'none' }}
+                                          className="outline-none"
+                                          tabIndex={-1}
+                                        >
                                           <Pie
                                             data={distribution.data}
                                             dataKey="count"
@@ -1550,13 +1622,13 @@ const ResultsDashboard: React.FC<Props> = ({
                     </div>
                   ) : (
                     <div className="mt-3 text-sm text-slate-400 bg-slate-50 border border-dashed rounded-xl p-4 text-center">
-                      No hay preguntas registradas para esta categoría.
+                      No hay preguntas registradas para esta categorÃ­a.
                     </div>
                   )}
                 </div>
               )}
               <div>
-                <h4 className="text-sm font-semibold text-slate-700">Comentarios por sección</h4>
+                <h4 className="text-sm font-semibold text-slate-700">Comentarios por secciÃ³n</h4>
                 <div className="mt-3 space-y-3 max-h-80 overflow-y-auto">
                   {selectedInternalCategory && internalCategoryComments.length > 0 ? (
                     internalCategoryComments.map((comment, index) => (
@@ -1569,7 +1641,7 @@ const ResultsDashboard: React.FC<Props> = ({
                     ))
                   ) : (
                     <div className="text-sm text-slate-400 bg-slate-50 border border-dashed rounded-xl p-6 text-center">
-                      {selectedInternalCategory ? 'No hay comentarios para esta categoría.' : 'Selecciona una categoría para ver comentarios.'}
+                      {selectedInternalCategory ? 'No hay comentarios para esta categorÃ­a.' : 'Selecciona una categorÃ­a para ver comentarios.'}
                     </div>
                   )}
                 </div>
@@ -1583,6 +1655,7 @@ const ResultsDashboard: React.FC<Props> = ({
 };
 
 export default ResultsDashboard;
+
 
 
 
