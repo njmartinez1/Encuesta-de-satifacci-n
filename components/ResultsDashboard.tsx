@@ -1544,7 +1544,7 @@ const ResultsDashboard: React.FC<Props> = ({
                               className={`overflow-hidden transition-all duration-300 ease-out ${isExpanded ? 'max-h-[1000px] opacity-100 translate-y-0 mt-3' : 'max-h-0 opacity-0 -translate-y-1'}`}
                             >
                               {distribution && distribution.total > 0 ? (
-                                <div ref={setCardRef} className="bg-white border rounded-lg p-4 mx-auto w-full max-w-[620px]">
+                                <div className="bg-white border rounded-lg p-4">
                                   <div className="flex items-center justify-between gap-3 mb-3">
                                     <span className="text-xs font-semibold text-slate-500">Detalle de respuestas</span>
                                     <button
@@ -1558,9 +1558,9 @@ const ResultsDashboard: React.FC<Props> = ({
                                       <Copy size={14} /> {copiedKey === `internal-question-${item.id}` ? 'Copiado' : 'Copiar imagen'}
                                     </button>
                                   </div>
-                                  <div className="grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-4 items-center min-w-0">
+                                  <div ref={setCardRef} className="grid grid-cols-1 md:grid-cols-[160px,1fr] gap-4 items-center min-w-0">
                                     <div
-                                      className="h-40 sm:h-36 select-none outline-none sm:justify-self-center"
+                                      className="h-40 md:h-36 select-none outline-none"
                                       onMouseDown={(event) => event.preventDefault()}
                                     >
                                       <ResponsiveContainer width="100%" height="100%">
