@@ -1601,9 +1601,9 @@ const ResultsDashboard: React.FC<Props> = ({
                                     <div className="space-y-2 text-xs text-slate-600 min-w-0">
                                       {distribution.data.map(entry => (
                                         <div key={`${item.id}-${entry.name}`} className="flex items-center justify-between gap-3">
-                                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                                          <div className="flex items-center gap-2 flex-1 min-w-[140px]">
                                             <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
-                                            <span className="truncate">{entry.name}</span>
+                                            <span className="break-words text-slate-600">{entry.name}</span>
                                           </div>
                                           <span className="font-semibold">{entry.count} ({entry.percent}%)</span>
                                         </div>
