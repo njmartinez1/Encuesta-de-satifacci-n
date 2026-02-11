@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Assignment, Evaluation, Employee, Question } from '../types.ts';
-import { getScaleRangeFromCount, getScorePercentage, getScaleScore } from '../scoreUtils.ts';
+import { DEFAULT_SCALE_SCORE_VALUES, getScaleRangeFromCount, getScorePercentage, getScaleScore } from '../scoreUtils.ts';
 import { analyzeEvaluations } from '../geminiService.ts';
 import { Sparkles, BarChart3, TrendingUp, Copy, Download } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
@@ -400,6 +400,10 @@ const ResultsDashboard: React.FC<Props> = ({
     const text = question.text.toLowerCase();
     return text.includes('del 1 al 10') || text.includes('escala del 1 al 10') || text.includes('del 0 al 10') || text.includes('escala del 0 al 10');
   };
+  const isSpecialScaleQuestion = (question: Question) => {
+    if (!question.options || question.options.length === 0) return false;
+    return question.options.length !== DEFAULT_SCALE_SCORE_VALUES.length;
+  };
 
   const normalizeZeroToTenValue = (value: number, question: Question) => {
     if (question.options && question.options.length === 11) {
@@ -514,22 +518,41 @@ const ResultsDashboard: React.FC<Props> = ({
       });
     });
 
-    const categoryPercents: { [key: string]: number[] } = {};
+    const categoryQuestions = new Map<string, Question[]>();
     Array.from(questionMap.values()).forEach(question => {
       if (question.type === 'text') return;
-      const data = questionScores.get(question.id);
-      if (!data || data.count === 0) return;
-      const percent = Math.round(Math.min(100, Math.max(0, (data.total / data.count) * 100)));
-      if (!categoryPercents[question.category]) categoryPercents[question.category] = [];
-      categoryPercents[question.category].push(percent);
+      const list = categoryQuestions.get(question.category) || [];
+      list.push(question);
+      categoryQuestions.set(question.category, list);
     });
 
-    const categories = Object.entries(categoryPercents).map(([name, percents]) => ({
-      name,
-      percent: percents.length > 0
-        ? Math.round(percents.reduce((sum, value) => sum + value, 0) / percents.length)
-        : 0,
-    }));
+    const categories = Array.from(categoryQuestions.entries()).map(([name, questions]) => {
+      const hasSpecial = questions.some(isSpecialScaleQuestion);
+      if (hasSpecial) {
+        const percents = questions.map(question => {
+          const data = questionScores.get(question.id);
+          if (!data || data.count === 0) return null;
+          return Math.round(Math.min(100, Math.max(0, (data.total / data.count) * 100)));
+        }).filter((value): value is number => value !== null);
+        const percent = percents.length > 0
+          ? Math.round(percents.reduce((sum, value) => sum + value, 0) / percents.length)
+          : 0;
+        return { name, percent };
+      }
+
+      let total = 0;
+      let count = 0;
+      questions.forEach(question => {
+        const data = questionScores.get(question.id);
+        if (!data || data.count === 0) return;
+        total += data.total;
+        count += data.count;
+      });
+      const percent = count > 0
+        ? Math.round(Math.min(100, Math.max(0, (total / count) * 100)))
+        : 0;
+      return { name, percent };
+    });
 
     return { categories, totalEvaluations: relevant.length };
   };
@@ -767,13 +790,14 @@ const ResultsDashboard: React.FC<Props> = ({
     return categoryQuestions.map(question => {
       const data = totals.get(question.id);
       if (!data || data.max === 0) {
-        return { id: question.id, text: question.text, percent: null };
+        return { id: question.id, text: question.text, percent: null, count: 0 };
       }
       const percent = Math.round(Math.min(100, Math.max(0, (data.total / data.max) * 100)));
       return {
         id: question.id,
         text: question.text,
         percent,
+        count: data.max,
       };
     });
   };
@@ -1275,7 +1299,7 @@ const ResultsDashboard: React.FC<Props> = ({
                         <div key={`${item.id}`} className="flex items-start justify-between gap-4 border rounded-lg p-3 text-sm bg-slate-50">
                           <span className="text-slate-700">{item.text}</span>
                           <span className="text-xs font-semibold text-slate-600">
-                            {item.percent === null ? 'Sin respuestas' : `${item.percent}%`}
+                            {item.percent === null ? 'Sin respuestas' : `${item.percent}% (${item.count})`}
                           </span>
                         </div>
                       ))}
