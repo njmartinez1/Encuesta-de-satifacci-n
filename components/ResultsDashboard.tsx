@@ -1529,7 +1529,11 @@ const ResultsDashboard: React.FC<Props> = ({
                           internalQuestionCardRefs.current[item.id] = node;
                         };
                         return (
-                          <div key={`${item.id}`} className="border rounded-lg p-3 text-sm bg-slate-50">
+                          <div
+                            key={`${item.id}`}
+                            ref={setCardRef}
+                            className="border rounded-lg p-3 text-sm bg-slate-50"
+                          >
                             <button
                               type="button"
                               onClick={() => setExpandedInternalQuestionId(prev => (prev === item.id ? null : item.id))}
@@ -1558,7 +1562,7 @@ const ResultsDashboard: React.FC<Props> = ({
                                       <Copy size={14} /> {copiedKey === `internal-question-${item.id}` ? 'Copiado' : 'Copiar imagen'}
                                     </button>
                                   </div>
-                                  <div ref={setCardRef} className="grid grid-cols-1 md:grid-cols-[160px,1fr] gap-4 items-center min-w-0">
+                                  <div className="grid grid-cols-1 md:grid-cols-[160px,1fr] gap-4 items-center min-w-0">
                                     <div
                                       className="h-40 md:h-36 select-none outline-none"
                                       onMouseDown={(event) => event.preventDefault()}
