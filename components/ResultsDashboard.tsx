@@ -53,6 +53,7 @@ const ResultsDashboard: React.FC<Props> = ({
   const internalChartRef = useRef<HTMLDivElement>(null);
   const overallPeerChartRef = useRef<HTMLDivElement>(null);
   const overallInternalChartRef = useRef<HTMLDivElement>(null);
+  const internalQuestionCardRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const peerQuestionMap = new Map(
     questions
       .filter(question => question.section === 'peer')
@@ -1016,6 +1017,26 @@ const ResultsDashboard: React.FC<Props> = ({
     };
     img.src = url;
   };
+  const copyElementToClipboard = async (element: HTMLElement | null) => {
+    if (!element) return;
+    if (!navigator.clipboard || typeof ClipboardItem === 'undefined') {
+      showAlert('Tu navegador no permite copiar imÃ¡genes al portapapeles.');
+      return;
+    }
+    try {
+      const module = await import('html2canvas');
+      const html2canvas = module.default;
+      const canvas = await html2canvas(element, { backgroundColor: '#ffffff', scale: 2 });
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+      if (!blob) {
+        showAlert('No se pudo generar la imagen.');
+        return;
+      }
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+    } catch (error) {
+      showAlert('No se pudo copiar la imagen.');
+    }
+  };
 
   useEffect(() => { setAiAnalysis(''); }, [selectedEmp]);
   useEffect(() => {
@@ -1440,12 +1461,15 @@ const ResultsDashboard: React.FC<Props> = ({
                       {internalCategoryQuestionTotals.map(item => {
                         const isExpanded = expandedInternalQuestionId === item.id;
                         const distribution = isExpanded ? getInternalQuestionDistribution(item.id) : null;
+                        const setCardRef = (node: HTMLDivElement | null) => {
+                          internalQuestionCardRefs.current[item.id] = node;
+                        };
                         return (
                           <div key={`${item.id}`} className="border rounded-lg p-3 text-sm bg-slate-50">
                             <button
                               type="button"
                               onClick={() => setExpandedInternalQuestionId(prev => (prev === item.id ? null : item.id))}
-                              className="w-full flex items-start justify-between gap-4 text-left"
+                              className="w-full flex items-start justify-between gap-4 text-left focus:outline-none focus-visible:outline-none"
                             >
                               <span className="text-slate-700">{item.text}</span>
                               <span className="text-xs font-semibold text-slate-600 whitespace-nowrap">
@@ -1457,17 +1481,33 @@ const ResultsDashboard: React.FC<Props> = ({
                             >
                               {distribution && distribution.total > 0 ? (
                                 <div className="bg-white border rounded-lg p-4">
-                                  <div className="grid grid-cols-1 md:grid-cols-[160px,1fr] gap-4 items-center">
-                                    <div className="h-36">
+                                  <div className="flex items-center justify-between gap-3 mb-3">
+                                    <span className="text-xs font-semibold text-slate-500">Detalle de respuestas</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => copyElementToClipboard(internalQuestionCardRefs.current[item.id] ?? null)}
+                                      className="text-[var(--color-primary)] flex items-center gap-2 text-xs font-bold focus:outline-none focus-visible:outline-none"
+                                    >
+                                      <Copy size={14} /> Copiar imagen
+                                    </button>
+                                  </div>
+                                  <div ref={setCardRef} className="grid grid-cols-1 md:grid-cols-[160px,1fr] gap-4 items-center">
+                                    <div
+                                      className="h-36 select-none"
+                                      onMouseDown={(event) => event.preventDefault()}
+                                    >
                                       <ResponsiveContainer width="100%" height="100%">
-                                        <PieChart>
+                                        <PieChart margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
                                           <Pie
                                             data={distribution.data}
                                             dataKey="count"
                                             nameKey="name"
-                                            innerRadius={40}
-                                            outerRadius={60}
+                                            innerRadius={36}
+                                            outerRadius={52}
                                             paddingAngle={2}
+                                            cx="50%"
+                                            cy="50%"
+                                            isAnimationActive={false}
                                           >
                                             {distribution.data.map((entry, index) => (
                                               <Cell key={`dist-${item.id}-${index}`} fill={entry.color} />
