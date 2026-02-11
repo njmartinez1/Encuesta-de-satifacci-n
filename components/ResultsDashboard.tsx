@@ -1563,9 +1563,13 @@ const ResultsDashboard: React.FC<Props> = ({
                                       <Copy size={14} /> {copiedKey === `internal-question-${item.id}` ? 'Copiado' : 'Copiar imagen'}
                                     </button>
                                   </div>
-                                  <div className="grid grid-cols-1 md:grid-cols-[160px,1fr] gap-4 items-center min-w-0">
+                                  <div
+                                    className={`grid gap-4 items-center min-w-0 ${
+                                      useBarChart ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-[160px,1fr]'
+                                    }`}
+                                  >
                                     <div
-                                      className={`select-none outline-none ${useBarChart ? 'h-44 md:h-40' : 'h-40 md:h-36'}`}
+                                      className={`select-none outline-none ${useBarChart ? 'h-56 md:h-48' : 'h-40 md:h-36'}`}
                                       onMouseDown={(event) => event.preventDefault()}
                                     >
                                       <ResponsiveContainer width="100%" height="100%">
@@ -1621,20 +1625,27 @@ const ResultsDashboard: React.FC<Props> = ({
                                         )}
                                       </ResponsiveContainer>
                                     </div>
-                                    <div className="space-y-2 text-xs text-slate-600 min-w-0">
-                                      {distribution.data.map(entry => (
-                                        <div key={`${item.id}-${entry.name}`} className="flex items-center justify-between gap-3">
-                                          <div className="flex items-center gap-2 flex-1 min-w-[140px]">
-                                            <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
-                                            <span className="break-words text-slate-600">{entry.name}</span>
+                                    {!useBarChart && (
+                                      <div className="space-y-2 text-xs text-slate-600 min-w-0">
+                                        {distribution.data.map(entry => (
+                                          <div key={`${item.id}-${entry.name}`} className="flex items-center justify-between gap-3">
+                                            <div className="flex items-center gap-2 flex-1 min-w-[140px]">
+                                              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
+                                              <span className="break-words text-slate-600">{entry.name}</span>
+                                            </div>
+                                            <span className="font-semibold">{entry.count} ({entry.percent}%)</span>
                                           </div>
-                                          <span className="font-semibold">{entry.count} ({entry.percent}%)</span>
+                                        ))}
+                                        <div className="pt-2 text-[11px] text-slate-500">
+                                          Total respuestas: {distribution.total}
                                         </div>
-                                      ))}
-                                      <div className="pt-2 text-[11px] text-slate-500">
+                                      </div>
+                                    )}
+                                    {useBarChart && (
+                                      <div className="text-[11px] text-slate-500">
                                         Total respuestas: {distribution.total}
                                       </div>
-                                    </div>
+                                    )}
                                   </div>
                                 </div>
                               ) : (
