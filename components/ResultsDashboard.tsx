@@ -48,6 +48,7 @@ const ResultsDashboard: React.FC<Props> = ({
   const [selectedInternalCategory, setSelectedInternalCategory] = useState('');
   const [aiAnalysis, setAiAnalysis] = useState<string>('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [expandedInternalQuestionId, setExpandedInternalQuestionId] = useState<number | null>(null);
   const chartRef = useRef<HTMLDivElement>(null);
   const internalChartRef = useRef<HTMLDivElement>(null);
   const overallPeerChartRef = useRef<HTMLDivElement>(null);
@@ -98,6 +99,39 @@ const ResultsDashboard: React.FC<Props> = ({
   ];
   const isNonScoringOptionLabel = (label: string) =>
     NON_SCORING_OPTION_LABELS.some(term => normalizeOptionLabel(label).includes(term));
+  const SCALE_RESPONSE_OPTIONS = [
+    { key: 'strong_disagree', label: 'Completamente en desacuerdo', value: -1, color: '#fecaca' },
+    { key: 'disagree', label: 'En desacuerdo', value: -0.75, color: '#fde68a' },
+    { key: 'agree', label: 'De acuerdo', value: 0.75, color: '#a7f3d0' },
+    { key: 'strong_agree', label: 'Completamente de acuerdo', value: 1, color: '#bbf7d0' },
+  ];
+  const SCALE_LABEL_TO_KEY: Record<string, string> = {
+    'totalmente en desacuerdo': 'strong_disagree',
+    'completamente en desacuerdo': 'strong_disagree',
+    'en desacuerdo': 'disagree',
+    'de acuerdo': 'agree',
+    'totalmente de acuerdo': 'strong_agree',
+    'completamente de acuerdo': 'strong_agree',
+  };
+  const getScaleKeyFromValue = (value: number) => {
+    const normalized = value === 1 ? -1
+      : value === 2 ? -0.75
+      : value === 3 ? 0.75
+      : value === 4 ? 1
+      : value;
+    const match = SCALE_RESPONSE_OPTIONS.find(option => option.value === normalized);
+    return match?.key ?? null;
+  };
+  const getScaleKeyForAnswer = (question: Question, answer: number | string | undefined) => {
+    if (answer === undefined || answer === null) return null;
+    if (typeof answer === 'string') {
+      if (isNonScoringOptionLabel(answer)) return null;
+      const normalized = normalizeOptionLabel(answer);
+      return SCALE_LABEL_TO_KEY[normalized] ?? null;
+    }
+    if (isNonScoringAnswer(question, answer)) return null;
+    return getScaleKeyFromValue(answer);
+  };
   const isNonScoringAnswer = (question: Question, score: number) => {
     if (!question.options || question.options.length === 0) return false;
     const noUseIndex = question.options.findIndex(option => isNonScoringOptionLabel(option));
@@ -826,6 +860,34 @@ const ResultsDashboard: React.FC<Props> = ({
       };
     });
   };
+  const getInternalQuestionDistribution = (questionId: number) => {
+    const question = internalQuestionMap.get(questionId);
+    if (!question) return null;
+    const counts: Record<string, number> = {};
+    SCALE_RESPONSE_OPTIONS.forEach(option => { counts[option.key] = 0; });
+    let total = 0;
+
+    filteredEvaluations.forEach(evaluation => {
+      const answer = evaluation.answers[questionId];
+      const key = getScaleKeyForAnswer(question, answer);
+      if (!key) return;
+      counts[key] += 1;
+      total += 1;
+    });
+
+    const data = SCALE_RESPONSE_OPTIONS.map(option => {
+      const count = counts[option.key] || 0;
+      const percent = total > 0 ? Math.round((count / total) * 100) : 0;
+      return {
+        name: option.label,
+        count,
+        percent,
+        color: option.color,
+      };
+    });
+
+    return { total, data };
+  };
   const getPeerQuestionTotalsForEmployee = (empId: string) => {
     const relevant = filteredEvaluations.filter(evaluation => (
       evaluation.evaluatedId === empId
@@ -1336,14 +1398,76 @@ const ResultsDashboard: React.FC<Props> = ({
                 <div>
                   {internalCategoryQuestionTotals.length > 0 ? (
                     <div className="mt-3 space-y-2">
-                      {internalCategoryQuestionTotals.map(item => (
-                        <div key={`${item.id}`} className="flex items-start justify-between gap-4 border rounded-lg p-3 text-sm bg-slate-50">
-                          <span className="text-slate-700">{item.text}</span>
-                          <span className="text-xs font-semibold text-slate-600">
-                            {item.percent === null ? 'Sin respuestas' : `${item.percent}% (${item.count} respuestas)`}
-                          </span>
-                        </div>
-                      ))}
+                      {internalCategoryQuestionTotals.map(item => {
+                        const isExpanded = expandedInternalQuestionId === item.id;
+                        const distribution = isExpanded ? getInternalQuestionDistribution(item.id) : null;
+                        return (
+                          <div key={`${item.id}`} className="border rounded-lg p-3 text-sm bg-slate-50">
+                            <button
+                              type="button"
+                              onClick={() => setExpandedInternalQuestionId(prev => (prev === item.id ? null : item.id))}
+                              className="w-full flex items-start justify-between gap-4 text-left"
+                            >
+                              <span className="text-slate-700">{item.text}</span>
+                              <span className="text-xs font-semibold text-slate-600 whitespace-nowrap">
+                                {item.percent === null ? 'Sin respuestas' : `${item.percent}% (${item.count} respuestas)`}
+                              </span>
+                            </button>
+                            <div
+                              className={`overflow-hidden transition-all duration-300 ease-out ${isExpanded ? 'max-h-72 opacity-100 translate-y-0 mt-3' : 'max-h-0 opacity-0 -translate-y-1'}`}
+                            >
+                              {distribution && distribution.total > 0 ? (
+                                <div className="bg-white border rounded-lg p-4">
+                                  <div className="grid grid-cols-1 md:grid-cols-[160px,1fr] gap-4 items-center">
+                                    <div className="h-36">
+                                      <ResponsiveContainer width="100%" height="100%">
+                                        <PieChart>
+                                          <Pie
+                                            data={distribution.data}
+                                            dataKey="count"
+                                            nameKey="name"
+                                            innerRadius={40}
+                                            outerRadius={60}
+                                            paddingAngle={2}
+                                          >
+                                            {distribution.data.map((entry, index) => (
+                                              <Cell key={`dist-${item.id}-${index}`} fill={entry.color} />
+                                            ))}
+                                          </Pie>
+                                          <Tooltip
+                                            formatter={(value: number, _name, props: { payload?: { percent?: number } }) => {
+                                              const pct = props?.payload?.percent ?? 0;
+                                              return [`${value} (${pct}%)`, 'Respuestas'];
+                                            }}
+                                          />
+                                        </PieChart>
+                                      </ResponsiveContainer>
+                                    </div>
+                                    <div className="space-y-2 text-xs text-slate-600">
+                                      {distribution.data.map(entry => (
+                                        <div key={`${item.id}-${entry.name}`} className="flex items-center justify-between gap-3">
+                                          <div className="flex items-center gap-2">
+                                            <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
+                                            <span>{entry.name}</span>
+                                          </div>
+                                          <span className="font-semibold">{entry.count} ({entry.percent}%)</span>
+                                        </div>
+                                      ))}
+                                      <div className="pt-2 text-[11px] text-slate-500">
+                                        Total respuestas vÃ¡lidas: {distribution.total}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="text-xs text-slate-400 bg-white border rounded-lg p-4">
+                                  No hay respuestas para esta pregunta.
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   ) : (
                     <div className="mt-3 text-sm text-slate-400 bg-slate-50 border border-dashed rounded-xl p-4 text-center">
