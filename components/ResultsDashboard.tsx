@@ -500,21 +500,35 @@ const ResultsDashboard: React.FC<Props> = ({
     );
     if (relevant.length === 0) return null;
 
-    const categoryScores: { [key: string]: { total: number; max: number } } = {};
+    const questionScores = new Map<number, { total: number; count: number }>();
     relevant.forEach(evalu => {
       Object.entries(evalu.answers).forEach(([qId, score]) => {
-        const question = questionMap.get(parseInt(qId, 10));
+        const questionId = parseInt(qId, 10);
+        const question = questionMap.get(questionId);
         if (!question || question.type === 'text' || typeof score !== 'number') return;
         if (isNonScoringAnswer(question, score)) return;
-        if (!categoryScores[question.category]) categoryScores[question.category] = { total: 0, max: 0 };
-        categoryScores[question.category].total += getPointValue(question, score);
-        categoryScores[question.category].max += 1;
+        const current = questionScores.get(questionId) || { total: 0, count: 0 };
+        current.total += getPointValue(question, score);
+        current.count += 1;
+        questionScores.set(questionId, current);
       });
     });
 
-    const categories = Object.entries(categoryScores).map(([name, data]) => ({
+    const categoryPercents: { [key: string]: number[] } = {};
+    Array.from(questionMap.values()).forEach(question => {
+      if (question.type === 'text') return;
+      const data = questionScores.get(question.id);
+      if (!data || data.count === 0) return;
+      const percent = Math.round(Math.min(100, Math.max(0, (data.total / data.count) * 100)));
+      if (!categoryPercents[question.category]) categoryPercents[question.category] = [];
+      categoryPercents[question.category].push(percent);
+    });
+
+    const categories = Object.entries(categoryPercents).map(([name, percents]) => ({
       name,
-      percent: data.max > 0 ? Math.round(Math.min(100, Math.max(0, (data.total / data.max) * 100))) : 0,
+      percent: percents.length > 0
+        ? Math.round(percents.reduce((sum, value) => sum + value, 0) / percents.length)
+        : 0,
     }));
 
     return { categories, totalEvaluations: relevant.length };
