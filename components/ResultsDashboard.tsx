@@ -736,6 +736,83 @@ const ResultsDashboard: React.FC<Props> = ({
       : DEFAULT_PALETTE;
 
   const getPastelColor = (index: number) => activePalette[index % activePalette.length];
+  const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+  const hexToRgb = (hex: string) => {
+    const normalized = hex.replace('#', '');
+    const parsed = normalized.length === 3
+      ? normalized.split('').map(ch => ch + ch).join('')
+      : normalized;
+    const int = parseInt(parsed, 16);
+    return {
+      r: (int >> 16) & 255,
+      g: (int >> 8) & 255,
+      b: int & 255,
+    };
+  };
+  const rgbToHsl = (r: number, g: number, b: number) => {
+    const nr = r / 255;
+    const ng = g / 255;
+    const nb = b / 255;
+    const max = Math.max(nr, ng, nb);
+    const min = Math.min(nr, ng, nb);
+    let h = 0;
+    let s = 0;
+    const l = (max + min) / 2;
+    const d = max - min;
+    if (d !== 0) {
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      switch (max) {
+        case nr:
+          h = (ng - nb) / d + (ng < nb ? 6 : 0);
+          break;
+        case ng:
+          h = (nb - nr) / d + 2;
+          break;
+        default:
+          h = (nr - ng) / d + 4;
+          break;
+      }
+      h *= 60;
+    }
+    return { h, s: s * 100, l: l * 100 };
+  };
+  const hslToHex = (h: number, s: number, l: number) => {
+    const sat = s / 100;
+    const light = l / 100;
+    const c = (1 - Math.abs(2 * light - 1)) * sat;
+    const hp = h / 60;
+    const x = c * (1 - Math.abs((hp % 2) - 1));
+    let r = 0;
+    let g = 0;
+    let b = 0;
+    if (hp >= 0 && hp < 1) [r, g, b] = [c, x, 0];
+    else if (hp < 2) [r, g, b] = [x, c, 0];
+    else if (hp < 3) [r, g, b] = [0, c, x];
+    else if (hp < 4) [r, g, b] = [0, x, c];
+    else if (hp < 5) [r, g, b] = [x, 0, c];
+    else [r, g, b] = [c, 0, x];
+    const m = light - c / 2;
+    const toHex = (value: number) => Math.round((value + m) * 255).toString(16).padStart(2, '0');
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+  };
+  const getTonePalette = (count: number, baseHex: string) => {
+    if (count <= 0) return [];
+    const { r, g, b } = hexToRgb(baseHex);
+    const base = rgbToHsl(r, g, b);
+    const hueRange = clamp(count * 3, 12, 36);
+    const lightRange = clamp(count * 2, 16, 30);
+    const startHue = base.h - hueRange / 2;
+    const endHue = base.h + hueRange / 2;
+    const startLight = clamp(base.l - lightRange / 2, 28, 70);
+    const endLight = clamp(base.l + lightRange / 2, 32, 80);
+    return Array.from({ length: count }, (_value, index) => {
+      const t = count === 1 ? 0.5 : index / (count - 1);
+      const hue = startHue + (endHue - startHue) * t;
+      const light = startLight + (endLight - startLight) * t;
+      const sat = clamp(base.s + (t - 0.5) * 12, 35, 75);
+      return hslToHex(hue, sat, light);
+    });
+  };
 
   const splitCommentBlocks = (commentText: string) => commentText
     .split(/\n{2,}/)
@@ -757,7 +834,7 @@ const ResultsDashboard: React.FC<Props> = ({
       const commentText = (evalu.comments || '').trim();
       if (!commentText) return;
       const authorName = resolveEvaluationAnonymity(evalu)
-        ? 'AnÃ³nimo'
+        ? 'Anónimo'
         : (employees.find(emp => emp.id === evalu.evaluatorId)?.name || 'N/A');
       splitCommentBlocks(commentText).forEach(block => {
         const tagged = parseTaggedBlock(block);
@@ -832,7 +909,7 @@ const ResultsDashboard: React.FC<Props> = ({
       const commentText = (evalu.comments || '').trim();
       if (!commentText) return;
       const authorName = resolveEvaluationAnonymity(evalu)
-        ? 'AnÃ³nimo'
+        ? 'Anónimo'
         : (employees.find(emp => emp.id === evalu.evaluatorId)?.name || 'N/A');
 
       const categoriesInEvaluation = new Set<string>();
@@ -917,6 +994,7 @@ const ResultsDashboard: React.FC<Props> = ({
       total += 1;
     });
 
+    const palette = getTonePalette(labels.length, activePalette[0] || '#34D399');
     const data = labels.map((label, index) => {
       const count = counts.get(label) || 0;
       const percent = total > 0 ? Math.round((count / total) * 100) : 0;
@@ -924,7 +1002,7 @@ const ResultsDashboard: React.FC<Props> = ({
         name: label,
         count,
         percent,
-        color: getPastelColor(index),
+        color: palette[index] || getPastelColor(index),
       };
     });
 
@@ -1511,10 +1589,10 @@ const ResultsDashboard: React.FC<Props> = ({
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
                 <h3 className="font-bold text-slate-800">Preguntas y porcentaje</h3>
-                <p className="text-sm text-slate-500">Selecciona una barra en la grÃ¡fica para ver el detalle de la secciÃ³n.</p>
+                <p className="text-sm text-slate-500">Selecciona una barra en la grÃ¡fica para ver el detalle de la sección.</p>
               </div>
               <span className="inline-flex items-center px-3 py-2 rounded-full text-sm font-semibold bg-slate-100 text-slate-700">
-                {selectedInternalCategory || 'Sin categorÃ­a'}
+                {selectedInternalCategory || 'Sin categoría'}
               </span>
             </div>
             <div className="mt-6 space-y-6">
@@ -1642,8 +1720,18 @@ const ResultsDashboard: React.FC<Props> = ({
                                       </div>
                                     )}
                                     {useBarChart && (
-                                      <div className="text-[11px] text-slate-500">
-                                        Total respuestas: {distribution.total}
+                                      <div className="space-y-2">
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px] text-slate-600">
+                                          {distribution.data.map(entry => (
+                                            <div key={`${item.id}-${entry.name}-legend`} className="flex items-center gap-2 min-w-0">
+                                              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
+                                              <span className="truncate">{entry.name}</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                        <div className="text-[11px] text-slate-500">
+                                          Total respuestas: {distribution.total}
+                                        </div>
                                       </div>
                                     )}
                                   </div>
