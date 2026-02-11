@@ -1299,7 +1299,7 @@ const ResultsDashboard: React.FC<Props> = ({
                         <div key={`${item.id}`} className="flex items-start justify-between gap-4 border rounded-lg p-3 text-sm bg-slate-50">
                           <span className="text-slate-700">{item.text}</span>
                           <span className="text-xs font-semibold text-slate-600">
-                            {item.percent === null ? 'Sin respuestas' : `${item.percent}% (${item.count})`}
+                            {item.percent === null ? 'Sin respuestas' : `${item.percent}% (${item.count} respuestas)`}
                           </span>
                         </div>
                       ))}

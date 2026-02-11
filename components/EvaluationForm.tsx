@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Employee, Evaluation, Question } from '../types.ts';
 import { Save } from 'lucide-react';
 import { useModal } from './ModalProvider.tsx';
-import { getScaleScore } from '../scoreUtils.ts';
+import { DEFAULT_SCALE_SCORE_VALUES, getScaleScore } from '../scoreUtils.ts';
 
 console.log("--> [EvaluationForm.tsx] Módulo cargado");
 
@@ -30,6 +30,32 @@ const NON_SCORING_OPTION_LABELS = [
 ];
 const isNonScoringOptionLabel = (label: string) =>
   NON_SCORING_OPTION_LABELS.some(term => normalizeOptionLabel(label).includes(term));
+
+const SCALE_LABEL_VALUES: Record<string, number> = {
+  'totalmente en desacuerdo': -1,
+  'completamente en desacuerdo': -1,
+  'en desacuerdo': -0.75,
+  'de acuerdo': 0.75,
+  'totalmente de acuerdo': 1,
+  'completamente de acuerdo': 1,
+};
+
+const getScoreForOption = (options: string[], optionIndex: number) => {
+  const hasNonScoring = options.some(label => isNonScoringOptionLabel(label));
+  const normalizedLabel = normalizeOptionLabel(options[optionIndex] || '');
+  const mappedByLabel = SCALE_LABEL_VALUES[normalizedLabel];
+  if (typeof mappedByLabel === 'number') return mappedByLabel;
+  const scoringOptions = options.filter(label => !isNonScoringOptionLabel(label));
+  if (hasNonScoring && scoringOptions.length === DEFAULT_SCALE_SCORE_VALUES.length) {
+    const scoringIndex = options
+      .slice(0, optionIndex)
+      .filter(label => !isNonScoringOptionLabel(label)).length;
+    const mapped = DEFAULT_SCALE_SCORE_VALUES[scoringIndex];
+    if (typeof mapped === 'number') return mapped;
+    return getScaleScore(scoringIndex, scoringOptions.length);
+  }
+  return getScaleScore(optionIndex, options.length);
+};
 
 const EvaluationForm: React.FC<Props> = ({ evaluatorId, targetEmployee, questions, sectionTitle, sectionDescription, initialAnswers, initialComments, onSave }) => {
   const { showAlert } = useModal();
@@ -170,7 +196,7 @@ const EvaluationForm: React.FC<Props> = ({ evaluatorId, targetEmployee, question
                       const isNonScoringOption = isNonScoringOptionLabel(label);
                       const optionValue = isNonScoringOption
                         ? label
-                        : getScaleScore(optionIndex, scaleOptions.length);
+                        : getScoreForOption(scaleOptions, optionIndex);
                       const isSelected = answers[q.id] === optionValue;
                       return (
                         <button
