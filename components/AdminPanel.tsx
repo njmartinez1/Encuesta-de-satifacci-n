@@ -362,6 +362,7 @@ const AdminPanel: React.FC<Props> = ({
               <option value="educator">Educador</option>
               <option value="principal">Principal</option>
               <option value="reviewer">Reviewer</option>
+              <option value="manager">Manager</option>
               <option value="viewer">Visualizador</option>
             </select>
           </label>

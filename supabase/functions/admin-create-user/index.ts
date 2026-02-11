@@ -72,7 +72,7 @@ serve(async (req) => {
   const campus = (payload.campus ?? "").trim();
   const isAdmin = Boolean(payload.is_admin);
   const accessRoleInput = (payload.access_role ?? "").trim().toLowerCase();
-  const allowedAccessRoles = new Set(["educator", "viewer", "principal", "reviewer"]);
+  const allowedAccessRoles = new Set(["educator", "viewer", "principal", "reviewer", "manager"]);
   const accessRole = allowedAccessRoles.has(accessRoleInput) ? accessRoleInput : "educator";
 
   if (!email || !name || !role) {

@@ -292,6 +292,7 @@ using (
   and (
     id = (select auth.uid())
     or public.is_admin()
+    or public.current_access_role() = 'manager'
     or (
       public.current_access_role() in ('viewer', 'principal', 'reviewer')
       and public.current_user_campus() is not null
@@ -360,6 +361,7 @@ using (
   public.is_allowed_email()
   and (
     public.is_admin()
+    or public.current_access_role() = 'manager'
     or evaluator_id = (select auth.uid())
     or (
       public.current_access_role() in ('viewer', 'principal', 'reviewer')
@@ -392,6 +394,7 @@ using (
   public.is_allowed_email()
   and (
     public.is_admin()
+    or public.current_access_role() = 'manager'
     or evaluator_id = (select auth.uid())
     or (
       public.current_access_role() in ('viewer', 'principal', 'reviewer')
