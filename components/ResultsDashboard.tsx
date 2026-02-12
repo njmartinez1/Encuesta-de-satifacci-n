@@ -407,7 +407,7 @@ const ResultsDashboard: React.FC<Props> = ({
       : filteredEvaluations.filter(evaluation => filteredEmployeeIds.has(evaluation.evaluatedId));
     const relevant = filterEvaluationsByQuestions(peerQuestionIds, exportBase);
     exportCsv(
-      buildFilename('desempeÃ±o_general'),
+      buildFilename('desempeño_general'),
       relevant,
       peerQuestions,
       'No hay evaluaciones de pares registradas.',
@@ -1346,7 +1346,7 @@ const ResultsDashboard: React.FC<Props> = ({
                         <div className="text-3xl font-bold text-slate-800">
                           {stats.overallPercent ?? 0}%
                         </div>
-                        <div className="text-xs font-semibold text-slate-500">CalificaciÃ³n general</div>
+                        <div className="text-xs font-semibold text-slate-500">Calificación general</div>
                       </div>
                     </div>
                     <div className="mt-6">
@@ -1373,7 +1373,7 @@ const ResultsDashboard: React.FC<Props> = ({
                 {stats && (
                   <div className="bg-slate-900 rounded-xl p-6 text-white">
                     <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-xl font-bold flex items-center gap-2"><Sparkles size={24} className="text-[var(--color-primary)]" /> AnÃ¡lisis IA</h3>
+                      <h3 className="text-xl font-bold flex items-center gap-2"><Sparkles size={24} className="text-[var(--color-primary)]" /> Análisis IA</h3>
                       <button onClick={handleAIAnalysis} disabled={isAnalyzing} className="bg-[var(--color-primary)] px-4 py-2 rounded-lg text-sm font-bold disabled:opacity-50">
                         {isAnalyzing ? 'Analizando...' : 'Analizar'}
                       </button>
@@ -1402,7 +1402,7 @@ const ResultsDashboard: React.FC<Props> = ({
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div>
                 <div className="flex items-center justify-between mb-4">
-                  <h4 className="font-semibold text-slate-800">DesempeÃ±o general</h4>
+                  <h4 className="font-semibold text-slate-800">Desempeño general</h4>
                   <div className="flex items-center gap-3">
                     <span className="text-xs text-slate-500">{overallPeerQuestionStats ? `${overallPeerQuestionStats.totalEvaluations} evaluaciones` : 'Sin datos'}</span>
                     {!hideGeneralExport && (
@@ -1450,7 +1450,7 @@ const ResultsDashboard: React.FC<Props> = ({
                   </div>
                 ) : (
                   <div className="text-sm text-slate-400 bg-slate-50 border border-dashed rounded-xl p-6 text-center">
-                    No hay evaluaciones de desempeÃ±o registradas.
+                    No hay evaluaciones de desempeño registradas.
                   </div>
                 )}
               </div>
@@ -1589,7 +1589,7 @@ const ResultsDashboard: React.FC<Props> = ({
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
                 <h3 className="font-bold text-slate-800">Preguntas y porcentaje</h3>
-                <p className="text-sm text-slate-500">Selecciona una barra en la grÃ¡fica para ver el detalle de la sección.</p>
+                <p className="text-sm text-slate-500">Selecciona una barra en la gráfica para ver el detalle de la sección.</p>
               </div>
               <span className="inline-flex items-center px-3 py-2 rounded-full text-sm font-semibold bg-slate-100 text-slate-700">
                 {selectedInternalCategory || 'Sin categoría'}
@@ -1748,7 +1748,7 @@ const ResultsDashboard: React.FC<Props> = ({
                     </div>
                   ) : (
                     <div className="mt-3 text-sm text-slate-400 bg-slate-50 border border-dashed rounded-xl p-4 text-center">
-                      No hay preguntas registradas para esta categorÃ­a.
+                      No hay preguntas registradas para esta categoría.
                     </div>
                   )}
                 </div>
@@ -1767,7 +1767,7 @@ const ResultsDashboard: React.FC<Props> = ({
                     ))
                   ) : (
                     <div className="text-sm text-slate-400 bg-slate-50 border border-dashed rounded-xl p-6 text-center">
-                      {selectedInternalCategory ? 'No hay comentarios para esta categorÃ­a.' : 'Selecciona una categorÃ­a para ver comentarios.'}
+                      {selectedInternalCategory ? 'No hay comentarios para esta categoría.' : 'Selecciona una categoría para ver comentarios.'}
                     </div>
                   )}
                 </div>
