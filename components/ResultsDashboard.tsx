@@ -418,7 +418,7 @@ const ResultsDashboard: React.FC<Props> = ({
   const handleExportGeneralInternal = () => {
     const relevant = filterEvaluationsByQuestions(internalQuestionIds);
     exportCsv(
-      buildFilename('satisfacciÃ³n_interna'),
+      buildFilename('satisfacción_interna'),
       relevant,
       internalQuestions,
       'No hay evaluaciones internas registradas.',
@@ -1456,7 +1456,7 @@ const ResultsDashboard: React.FC<Props> = ({
               </div>
               <div>
                 <div className="flex items-center justify-between mb-4">
-                  <h4 className="font-semibold text-slate-800">SatisfacciÃ³n interna (global)</h4>
+                  <h4 className="font-semibold text-slate-800">Satisfacción interna (global)</h4>
                   <div className="flex items-center gap-3">
                     <span className="text-xs text-slate-500">{overallInternalStats ? `${overallInternalStats.totalEvaluations} evaluaciones` : 'Sin datos'}</span>
                     {!hideGeneralExport && (
@@ -1754,7 +1754,7 @@ const ResultsDashboard: React.FC<Props> = ({
                 </div>
               )}
               <div>
-                <h4 className="text-sm font-semibold text-slate-700">Comentarios por secciÃ³n</h4>
+                <h4 className="text-sm font-semibold text-slate-700">Comentarios por sección</h4>
                 <div className="mt-3 space-y-3 max-h-80 overflow-y-auto">
                   {selectedInternalCategory && internalCategoryComments.length > 0 ? (
                     internalCategoryComments.map((comment, index) => (
