@@ -195,10 +195,13 @@ const ResultsDashboard: React.FC<Props> = ({
   const clampChannel = (value: number) => Math.min(255, Math.max(0, value));
   const hexToRgb = (hex: string) => {
     const cleaned = hex.replace('#', '');
-    if (cleaned.length !== 6) return null;
-    const r = Number.parseInt(cleaned.slice(0, 2), 16);
-    const g = Number.parseInt(cleaned.slice(2, 4), 16);
-    const b = Number.parseInt(cleaned.slice(4, 6), 16);
+    if (cleaned.length !== 6 && cleaned.length !== 3) return null;
+    const normalized = cleaned.length === 3
+      ? cleaned.split('').map(ch => ch + ch).join('')
+      : cleaned;
+    const r = Number.parseInt(normalized.slice(0, 2), 16);
+    const g = Number.parseInt(normalized.slice(2, 4), 16);
+    const b = Number.parseInt(normalized.slice(4, 6), 16);
     if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) return null;
     return { r, g, b };
   };
@@ -737,18 +740,6 @@ const ResultsDashboard: React.FC<Props> = ({
 
   const getPastelColor = (index: number) => activePalette[index % activePalette.length];
   const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
-  const hexToRgb = (hex: string) => {
-    const normalized = hex.replace('#', '');
-    const parsed = normalized.length === 3
-      ? normalized.split('').map(ch => ch + ch).join('')
-      : normalized;
-    const int = parseInt(parsed, 16);
-    return {
-      r: (int >> 16) & 255,
-      g: (int >> 8) & 255,
-      b: int & 255,
-    };
-  };
   const rgbToHsl = (r: number, g: number, b: number) => {
     const nr = r / 255;
     const ng = g / 255;
