@@ -56,8 +56,6 @@ const ResultsDashboard: React.FC<Props> = ({
   const [aiAnalysis, setAiAnalysis] = useState<string>('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [employeeResponderSummary, setEmployeeResponderSummary] = useState<ResponderSummary | null>(null);
-  const [peerChartResponderSummary, setPeerChartResponderSummary] = useState<ResponderSummary | null>(null);
-  const [internalChartResponderSummary, setInternalChartResponderSummary] = useState<ResponderSummary | null>(null);
   const [optionResponderSummaryByQuestion, setOptionResponderSummaryByQuestion] = useState<Record<number, ResponderSummary | null>>({});
   const [expandedInternalQuestionId, setExpandedInternalQuestionId] = useState<number | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -286,13 +284,6 @@ const ResultsDashboard: React.FC<Props> = ({
     const b = startRgb.b * (1 - clamped) + endRgb.b * clamped;
     return rgbToHex(r, g, b);
   };
-  const getScoreRingColor = (percent: number) => {
-    const lowColor = '#f6b4b4';
-    const highColor = '#40CCA1';
-    const ratio = percent / 100;
-    return mixHex(lowColor, highColor, ratio);
-  };
-
   const normalizeCampusValue = (value: string) => value
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -614,20 +605,6 @@ const ResultsDashboard: React.FC<Props> = ({
       return question?.category === category;
     });
   });
-  const getPeerEvaluationsForQuestion = (questionId: number) => filteredEvaluations.filter(evaluation =>
-    Object.prototype.hasOwnProperty.call(evaluation.answers, String(questionId))
-  );
-  const getInternalEvaluationsForCategory = (category: string) => {
-    const questionIds = new Set(
-      internalQuestions
-        .filter(question => question.category === category)
-        .map(question => question.id)
-    );
-    if (questionIds.size === 0) return [];
-    return filteredEvaluations.filter(evaluation =>
-      Object.keys(evaluation.answers).some(questionId => questionIds.has(Number(questionId)))
-    );
-  };
   const getInternalEvaluationsForQuestionOption = (questionId: number, optionLabel: string) => {
     const question = internalQuestionMap.get(questionId);
     if (!question) return [];
@@ -840,83 +817,20 @@ const ResultsDashboard: React.FC<Props> = ({
       .toLowerCase()
       .trim();
 
-  const PUEMBO_PALETTE = ['#40CCA1', '#2EA884', '#67D8B7', '#1F7A62', '#9AE7D3'];
-  const SANTA_CLARA_PALETTE = ['#4D82BC', '#8AB6F4', '#C4D6FA', '#F8C2DA', '#F7D7EF'];
-  const DEFAULT_PALETTE = ['#34D399', '#60A5FA', '#FBBF24', '#F472B6', '#818CF8', '#F87171'];
-
   const paletteSource = selectedCampus !== 'all' ? selectedCampus : campus;
   const normalizedPaletteSource = normalizeCampusName(paletteSource);
-  const activePalette = normalizedPaletteSource.includes('puembo')
-    ? PUEMBO_PALETTE
+  const PUEMBO_HIGH_COLOR = '#40CCA1';
+  const SANTA_CLARA_HIGH_COLOR = '#4D82BC';
+  const DEFAULT_HIGH_COLOR = '#40CCA1';
+  const LOW_COLOR = '#f6b4b4';
+  const campusHighColor = normalizedPaletteSource.includes('puembo')
+    ? PUEMBO_HIGH_COLOR
     : normalizedPaletteSource.includes('santa clara') || normalizedPaletteSource.includes('santaclara')
-      ? SANTA_CLARA_PALETTE
-      : DEFAULT_PALETTE;
-
-  const getPastelColor = (index: number) => activePalette[index % activePalette.length];
-  const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
-  const rgbToHsl = (r: number, g: number, b: number) => {
-    const nr = r / 255;
-    const ng = g / 255;
-    const nb = b / 255;
-    const max = Math.max(nr, ng, nb);
-    const min = Math.min(nr, ng, nb);
-    let h = 0;
-    let s = 0;
-    const l = (max + min) / 2;
-    const d = max - min;
-    if (d !== 0) {
-      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-      switch (max) {
-        case nr:
-          h = (ng - nb) / d + (ng < nb ? 6 : 0);
-          break;
-        case ng:
-          h = (nb - nr) / d + 2;
-          break;
-        default:
-          h = (nr - ng) / d + 4;
-          break;
-      }
-      h *= 60;
-    }
-    return { h, s: s * 100, l: l * 100 };
-  };
-  const hslToHex = (h: number, s: number, l: number) => {
-    const sat = s / 100;
-    const light = l / 100;
-    const c = (1 - Math.abs(2 * light - 1)) * sat;
-    const hp = h / 60;
-    const x = c * (1 - Math.abs((hp % 2) - 1));
-    let r = 0;
-    let g = 0;
-    let b = 0;
-    if (hp >= 0 && hp < 1) [r, g, b] = [c, x, 0];
-    else if (hp < 2) [r, g, b] = [x, c, 0];
-    else if (hp < 3) [r, g, b] = [0, c, x];
-    else if (hp < 4) [r, g, b] = [0, x, c];
-    else if (hp < 5) [r, g, b] = [x, 0, c];
-    else [r, g, b] = [c, 0, x];
-    const m = light - c / 2;
-    const toHex = (value: number) => Math.round((value + m) * 255).toString(16).padStart(2, '0');
-    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
-  };
-  const getTonePalette = (count: number, baseHex: string) => {
-    if (count <= 0) return [];
-    const { r, g, b } = hexToRgb(baseHex);
-    const base = rgbToHsl(r, g, b);
-    const hueRange = clamp(count * 3, 12, 36);
-    const lightRange = clamp(count * 2, 16, 30);
-    const startHue = base.h - hueRange / 2;
-    const endHue = base.h + hueRange / 2;
-    const startLight = clamp(base.l - lightRange / 2, 28, 70);
-    const endLight = clamp(base.l + lightRange / 2, 32, 80);
-    return Array.from({ length: count }, (_value, index) => {
-      const t = count === 1 ? 0.5 : index / (count - 1);
-      const hue = startHue + (endHue - startHue) * t;
-      const light = startLight + (endLight - startLight) * t;
-      const sat = clamp(base.s + (t - 0.5) * 12, 35, 75);
-      return hslToHex(hue, sat, light);
-    });
+      ? SANTA_CLARA_HIGH_COLOR
+      : DEFAULT_HIGH_COLOR;
+  const getScoreRingColor = (percent: number) => {
+    const ratio = Math.min(1, Math.max(0, percent / 100));
+    return mixHex(LOW_COLOR, campusHighColor, ratio);
   };
 
   const splitCommentBlocks = (commentText: string) => commentText
@@ -1099,7 +1013,6 @@ const ResultsDashboard: React.FC<Props> = ({
       total += 1;
     });
 
-    const palette = getTonePalette(labels.length, activePalette[0] || '#34D399');
     const data = labels.map((label, index) => {
       const count = counts.get(label) || 0;
       const percent = total > 0 ? Math.round((count / total) * 100) : 0;
@@ -1107,7 +1020,7 @@ const ResultsDashboard: React.FC<Props> = ({
         name: label,
         count,
         percent,
-        color: palette[index] || getPastelColor(index),
+        color: getScoreRingColor(percent),
       };
     });
 
@@ -1300,8 +1213,6 @@ const ResultsDashboard: React.FC<Props> = ({
     setEmployeeResponderSummary(null);
   }, [selectedEmp, selectedCampus]);
   useEffect(() => {
-    setPeerChartResponderSummary(null);
-    setInternalChartResponderSummary(null);
     setOptionResponderSummaryByQuestion({});
   }, [selectedCampus, viewMode]);
 
@@ -1582,31 +1493,14 @@ const ResultsDashboard: React.FC<Props> = ({
                         />
                         <YAxis domain={[0, 100]} tickFormatter={formatPercent} />
                         <Tooltip content={renderScoreTooltip()} />
-                        <Bar
-                          dataKey="percent"
-                          radius={[4, 4, 0, 0]}
-                          onClick={(data) => {
-                            const questionId = Number(data?.payload?.id ?? data?.id);
-                            if (!Number.isFinite(questionId)) return;
-                            const question = peerQuestionMap.get(questionId);
-                            const relevant = getPeerEvaluationsForQuestion(questionId);
-                            setPeerChartResponderSummary(
-                              buildResponderSummary(`Seleccionado: ${question?.text ?? 'Pregunta'}`, relevant)
-                            );
-                          }}
-                        >
-                          {overallPeerQuestionStats.questions.map((_, index) => (
-                            <Cell key={`peer-overall-${index}`} fill={getPastelColor(index)} />
+                        <Bar dataKey="percent" radius={[4, 4, 0, 0]}>
+                          {overallPeerQuestionStats.questions.map((item, index) => (
+                            <Cell key={`peer-overall-${index}`} fill={getScoreRingColor(item.percent)} />
                           ))}
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
-                  {renderResponderSummary(
-                    peerChartResponderSummary,
-                    'Haz clic en una barra para ver quiénes respondieron esa pregunta.',
-                    false
-                  )}
                 </>
               ) : (
                   <div className="text-sm text-slate-400 bg-slate-50 border border-dashed rounded-xl p-6 text-center">
@@ -1658,28 +1552,14 @@ const ResultsDashboard: React.FC<Props> = ({
                         <Bar
                           dataKey="percent"
                           radius={[4, 4, 0, 0]}
-                          onClick={(data) => {
-                            const nextCategory = data?.payload?.name ?? data?.name;
-                            if (!nextCategory) return;
-                            setSelectedInternalCategory(nextCategory);
-                            const relevant = getInternalEvaluationsForCategory(nextCategory);
-                            setInternalChartResponderSummary(
-                              buildResponderSummary(`Seleccionado: ${nextCategory}`, relevant)
-                            );
-                          }}
                         >
-                          {overallInternalStats.categories.map((_, index) => (
-                            <Cell key={`internal-overall-${index}`} fill={getPastelColor(index)} />
+                          {overallInternalStats.categories.map((item, index) => (
+                            <Cell key={`internal-overall-${index}`} fill={getScoreRingColor(item.percent)} />
                           ))}
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
-                  {renderResponderSummary(
-                    internalChartResponderSummary,
-                    'Haz clic en una barra para ver quiénes respondieron esa sección.',
-                    false
-                  )}
                 </>
               ) : (
                   <div className="text-sm text-slate-400 bg-slate-50 border border-dashed rounded-xl p-6 text-center">
