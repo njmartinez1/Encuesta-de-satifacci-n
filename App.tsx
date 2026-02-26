@@ -1841,7 +1841,7 @@ const App: React.FC = () => {
               hideEmployeeExport={isReviewer}
               canSelectCampus={isAdmin || isManager}
               forcedCampus={isAdmin || isManager ? null : (currentUser?.campus ?? null)}
-              showCommentAuthors={isAdmin || isManager}
+              showCommentAuthors={isAdmin || isManager || isPrincipal}
             />
           </div>
         )}
