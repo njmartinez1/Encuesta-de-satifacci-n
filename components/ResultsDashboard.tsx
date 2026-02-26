@@ -122,7 +122,11 @@ const ResultsDashboard: React.FC<Props> = ({
       totalParticipants: names.length + anonymousEvaluators.size,
     };
   };
-  const renderResponderSummary = (summary: ResponderSummary | null, hint: string) => (
+  const renderResponderSummary = (
+    summary: ResponderSummary | null,
+    hint: string,
+    allowNames = showCommentAuthors
+  ) => (
     <div className="mt-4 border rounded-lg bg-slate-50 p-3">
       {!summary ? (
         <div className="text-xs text-slate-500">{hint}</div>
@@ -130,7 +134,7 @@ const ResultsDashboard: React.FC<Props> = ({
         <div className="space-y-2">
           <div className="text-xs font-semibold text-slate-700">{summary.title}</div>
           <div className="text-xs text-slate-500">{summary.totalParticipants} participante(s)</div>
-          {showCommentAuthors ? (
+          {allowNames ? (
             summary.names.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {summary.names.map(name => (
@@ -1481,10 +1485,11 @@ const ResultsDashboard: React.FC<Props> = ({
                         <div className="text-xs font-semibold text-slate-500">Calificación general</div>
                       </div>
                     </div>
-                    {renderResponderSummary(
-                      employeeResponderSummary,
-                      'Haz clic en una sección del anillo para ver quiénes aportaron a ese resultado.'
-                    )}
+                  {renderResponderSummary(
+                    employeeResponderSummary,
+                    'Haz clic en una sección del anillo para ver quiénes aportaron a ese resultado.',
+                    false
+                  )}
                     <div className="mt-6">
                       <h4 className="font-semibold text-slate-800 mb-3">Comentarios sobre este empleado</h4>
                       {peerCommentsForEmployee.length > 0 ? (
@@ -1599,7 +1604,8 @@ const ResultsDashboard: React.FC<Props> = ({
                   </div>
                   {renderResponderSummary(
                     peerChartResponderSummary,
-                    'Haz clic en una barra para ver quiénes respondieron esa pregunta.'
+                    'Haz clic en una barra para ver quiénes respondieron esa pregunta.',
+                    false
                   )}
                 </>
               ) : (
@@ -1671,7 +1677,8 @@ const ResultsDashboard: React.FC<Props> = ({
                   </div>
                   {renderResponderSummary(
                     internalChartResponderSummary,
-                    'Haz clic en una barra para ver quiénes respondieron esa sección.'
+                    'Haz clic en una barra para ver quiénes respondieron esa sección.',
+                    false
                   )}
                 </>
               ) : (
