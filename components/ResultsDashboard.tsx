@@ -1711,6 +1711,11 @@ const ResultsDashboard: React.FC<Props> = ({
                                           <BarChart
                                             data={distribution.data}
                                             margin={{ top: 8, right: 8, bottom: 16, left: 0 }}
+                                            onClick={(chartState?: { activeLabel?: string; activePayload?: { payload?: { name?: string } }[] }) => {
+                                              const optionLabel = chartState?.activeLabel
+                                                ?? chartState?.activePayload?.[0]?.payload?.name;
+                                              handleInternalOptionChartClick(item.id, optionLabel);
+                                            }}
                                           >
                                             <CartesianGrid strokeDasharray="3 3" />
                                             <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} />
@@ -1725,10 +1730,6 @@ const ResultsDashboard: React.FC<Props> = ({
                                               dataKey="count"
                                               radius={[4, 4, 0, 0]}
                                               isAnimationActive={false}
-                                              onClick={(data) => {
-                                                const optionLabel = data?.payload?.name ?? data?.name;
-                                                handleInternalOptionChartClick(item.id, optionLabel);
-                                              }}
                                             >
                                               {distribution.data.map((entry, index) => (
                                                 <Cell key={`dist-${item.id}-${index}`} fill={entry.color} />
@@ -1805,7 +1806,7 @@ const ResultsDashboard: React.FC<Props> = ({
                                   </div>
                                   {renderResponderSummary(
                                     optionResponderSummaryByQuestion[item.id] ?? null,
-                                    'Haz clic en una barra o sección del pastel para ver quiénes eligieron esa opción.'
+                                    'Haz clic en la barra/área resaltada o en una sección del pastel para ver quiénes eligieron esa opción.'
                                   )}
                                 </div>
                               ) : (
