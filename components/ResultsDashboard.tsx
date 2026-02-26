@@ -823,14 +823,18 @@ const ResultsDashboard: React.FC<Props> = ({
   const SANTA_CLARA_HIGH_COLOR = '#4D82BC';
   const DEFAULT_HIGH_COLOR = '#40CCA1';
   const LOW_COLOR = '#f6b4b4';
+  const MID_COLOR = '#f4d35e';
   const campusHighColor = normalizedPaletteSource.includes('puembo')
     ? PUEMBO_HIGH_COLOR
     : normalizedPaletteSource.includes('santa clara') || normalizedPaletteSource.includes('santaclara')
       ? SANTA_CLARA_HIGH_COLOR
       : DEFAULT_HIGH_COLOR;
   const getScoreRingColor = (percent: number) => {
-    const ratio = Math.min(1, Math.max(0, percent / 100));
-    return mixHex(LOW_COLOR, campusHighColor, ratio);
+    const clamped = Math.min(100, Math.max(0, percent));
+    if (clamped <= 50) {
+      return mixHex(LOW_COLOR, MID_COLOR, clamped / 50);
+    }
+    return mixHex(MID_COLOR, campusHighColor, (clamped - 50) / 50);
   };
 
   const splitCommentBlocks = (commentText: string) => commentText
