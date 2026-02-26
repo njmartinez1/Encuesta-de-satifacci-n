@@ -22,6 +22,13 @@ interface Props {
   showCommentAuthors?: boolean;
 }
 
+type ResponderSummary = {
+  title: string;
+  names: string[];
+  anonymousCount: number;
+  totalParticipants: number;
+};
+
 const ResultsDashboard: React.FC<Props> = ({
   evaluations,
   employees,
@@ -48,6 +55,10 @@ const ResultsDashboard: React.FC<Props> = ({
   const [selectedInternalCategory, setSelectedInternalCategory] = useState('');
   const [aiAnalysis, setAiAnalysis] = useState<string>('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [employeeResponderSummary, setEmployeeResponderSummary] = useState<ResponderSummary | null>(null);
+  const [peerChartResponderSummary, setPeerChartResponderSummary] = useState<ResponderSummary | null>(null);
+  const [internalChartResponderSummary, setInternalChartResponderSummary] = useState<ResponderSummary | null>(null);
+  const [optionResponderSummaryByQuestion, setOptionResponderSummaryByQuestion] = useState<Record<number, ResponderSummary | null>>({});
   const [expandedInternalQuestionId, setExpandedInternalQuestionId] = useState<number | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const chartRef = useRef<HTMLDivElement>(null);
@@ -91,6 +102,58 @@ const ResultsDashboard: React.FC<Props> = ({
     internalAnonymityByEvaluator.get(makeAnonymityKey(evaluation.evaluatorId, evaluation.periodId))
     ?? evaluation.isAnonymous
     ?? false;
+  const buildResponderSummary = (title: string, evaluationList: Evaluation[]): ResponderSummary => {
+    const visibleNamesByEvaluator = new Map<string, string>();
+    const anonymousEvaluators = new Set<string>();
+    evaluationList.forEach((evaluation) => {
+      if (resolveEvaluationAnonymity(evaluation)) {
+        anonymousEvaluators.add(evaluation.evaluatorId);
+        return;
+      }
+      const evaluatorName = employees.find(emp => emp.id === evaluation.evaluatorId)?.name || 'N/A';
+      visibleNamesByEvaluator.set(evaluation.evaluatorId, evaluatorName);
+      anonymousEvaluators.delete(evaluation.evaluatorId);
+    });
+    const names = Array.from(visibleNamesByEvaluator.values()).sort((a, b) => a.localeCompare(b, 'es'));
+    return {
+      title,
+      names,
+      anonymousCount: anonymousEvaluators.size,
+      totalParticipants: names.length + anonymousEvaluators.size,
+    };
+  };
+  const renderResponderSummary = (summary: ResponderSummary | null, hint: string) => (
+    <div className="mt-4 border rounded-lg bg-slate-50 p-3">
+      {!summary ? (
+        <div className="text-xs text-slate-500">{hint}</div>
+      ) : (
+        <div className="space-y-2">
+          <div className="text-xs font-semibold text-slate-700">{summary.title}</div>
+          <div className="text-xs text-slate-500">{summary.totalParticipants} participante(s)</div>
+          {showCommentAuthors ? (
+            summary.names.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {summary.names.map(name => (
+                  <span key={`${summary.title}-${name}`} className="text-xs px-2 py-1 rounded-full bg-white border text-slate-700">
+                    {name}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <div className="text-xs text-slate-500">No hay nombres visibles en este segmento.</div>
+            )
+          ) : (
+            <div className="text-xs text-slate-500">Los nombres no están habilitados para tu rol.</div>
+          )}
+          {summary.anonymousCount > 0 && (
+            <div className="text-xs text-slate-500">
+              {summary.anonymousCount} respuesta(s) anónima(s) ocultas.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
   const normalizeOptionLabel = (value: string) => value
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -536,6 +599,53 @@ const ResultsDashboard: React.FC<Props> = ({
     const label = chartState?.activeLabel ?? chartState?.activePayload?.[0]?.payload?.name;
     if (label) setSelectedInternalCategory(label);
   };
+  const getPeerEvaluationsForEmployee = (empId: string) => filteredEvaluations.filter(evaluation => (
+    evaluation.evaluatedId === empId
+    && Object.keys(evaluation.answers).some(questionId => peerQuestionIds.has(Number(questionId)))
+  ));
+  const getPeerEvaluationsForEmployeeCategory = (empId: string, category: string) => filteredEvaluations.filter((evaluation) => {
+    if (evaluation.evaluatedId !== empId) return false;
+    return Object.keys(evaluation.answers).some((questionId) => {
+      const question = peerQuestionMap.get(Number(questionId));
+      return question?.category === category;
+    });
+  });
+  const getPeerEvaluationsForQuestion = (questionId: number) => filteredEvaluations.filter(evaluation =>
+    Object.prototype.hasOwnProperty.call(evaluation.answers, String(questionId))
+  );
+  const getInternalEvaluationsForCategory = (category: string) => {
+    const questionIds = new Set(
+      internalQuestions
+        .filter(question => question.category === category)
+        .map(question => question.id)
+    );
+    if (questionIds.size === 0) return [];
+    return filteredEvaluations.filter(evaluation =>
+      Object.keys(evaluation.answers).some(questionId => questionIds.has(Number(questionId)))
+    );
+  };
+  const getInternalEvaluationsForQuestionOption = (questionId: number, optionLabel: string) => {
+    const question = internalQuestionMap.get(questionId);
+    if (!question) return [];
+    const normalizedOption = normalizeOptionLabel(optionLabel);
+    return filteredEvaluations.filter((evaluation) => {
+      const answerLabel = getLabelForAnswer(question, evaluation.answers[questionId]);
+      if (!answerLabel) return false;
+      return normalizeOptionLabel(answerLabel) === normalizedOption;
+    });
+  };
+  const handleInternalOptionChartClick = (questionId: number, optionLabel?: string) => {
+    if (!optionLabel) return;
+    const question = internalQuestionMap.get(questionId);
+    const relevant = getInternalEvaluationsForQuestionOption(questionId, optionLabel);
+    const title = question
+      ? `Opción seleccionada: ${optionLabel}`
+      : `Seleccionado: ${optionLabel}`;
+    setOptionResponderSummaryByQuestion(prev => ({
+      ...prev,
+      [questionId]: buildResponderSummary(title, relevant),
+    }));
+  };
 
   const getStatsForEmployee = (empId: string) => {
     const relevant = filteredEvaluations.filter(e => {
@@ -685,9 +795,9 @@ const ResultsDashboard: React.FC<Props> = ({
       .map(question => {
         const data = questionScores[question.id];
         if (!data || data.count === 0) return null;
-        return { name: question.text, percent: Math.round(data.sum / data.count) };
+        return { id: question.id, name: question.text, percent: Math.round(data.sum / data.count) };
       })
-      .filter(Boolean) as { name: string; percent: number }[];
+      .filter(Boolean) as { id: number; name: string; percent: number }[];
 
     if (questions.length === 0) return null;
     return { questions, totalEvaluations: relevant.length };
@@ -1179,6 +1289,17 @@ const ResultsDashboard: React.FC<Props> = ({
       setSelectedEmp(null);
     }
   }, [selectedCampus, selectedEmp, filteredEmployeeIds]);
+  useEffect(() => {
+    setOptionResponderSummaryByQuestion({});
+  }, [selectedInternalCategory]);
+  useEffect(() => {
+    setEmployeeResponderSummary(null);
+  }, [selectedEmp, selectedCampus]);
+  useEffect(() => {
+    setPeerChartResponderSummary(null);
+    setInternalChartResponderSummary(null);
+    setOptionResponderSummaryByQuestion({});
+  }, [selectedCampus, viewMode]);
 
   const stats = selectedEmp ? getStatsForEmployee(selectedEmp.id) : null;
   const internalStats = selectedEmp ? getInternalStats(selectedEmp.id) : null;
@@ -1195,10 +1316,7 @@ const ResultsDashboard: React.FC<Props> = ({
   const peerCommentsForEmployee = selectedEmp ? getPeerCommentsForEmployee(selectedEmp.id) : [];
   const internalCommentsForEmployee = selectedEmp ? getInternalCommentsForEmployee(selectedEmp.id) : [];
   const peerEvaluationsForSelected = selectedEmp
-    ? filteredEvaluations.filter(evalu => (
-      evalu.evaluatedId === selectedEmp.id
-      && Object.keys(evalu.answers).some(qId => peerQuestionMap.has(parseInt(qId, 10)))
-    ))
+    ? getPeerEvaluationsForEmployee(selectedEmp.id)
     : [];
   const completedPeerCount = peerEvaluationsForSelected.length;
   const assignedPeerCount = selectedEmp ? (assignedCountByTarget[selectedEmp.id] || 0) : 0;
@@ -1212,6 +1330,19 @@ const ResultsDashboard: React.FC<Props> = ({
     ...getPeerQuestionTotalsForEmployee(employee.id),
   }));
   const hasPeerTableData = peerTableRows.some(row => row.hasData);
+  const employeeRingData = stats
+    ? (stats.categories.length > 0
+      ? stats.categories.map(category => ({
+        name: category.name,
+        value: Math.max(0, category.percent),
+        color: getScoreRingColor(category.percent),
+      }))
+      : [{
+        name: 'Calificación',
+        value: Math.max(0, stats.overallPercent ?? 0),
+        color: getScoreRingColor(stats.overallPercent ?? 0),
+      }])
+    : [];
 
   return (
     <div className="space-y-6">
@@ -1317,19 +1448,29 @@ const ResultsDashboard: React.FC<Props> = ({
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Pie
-                            data={[
-                              { name: 'score', value: stats.overallPercent ?? 0 },
-                              { name: 'rest', value: 100 - (stats.overallPercent ?? 0) },
-                            ]}
+                            data={employeeRingData}
                             dataKey="value"
                             innerRadius={70}
                             outerRadius={95}
                             stroke="none"
                             startAngle={90}
                             endAngle={-270}
+                            onClick={(entry) => {
+                              if (!selectedEmp) return;
+                              const categoryName = entry?.name ?? entry?.payload?.name;
+                              if (!categoryName) return;
+                              const hasCategory = stats.categories.some(category => category.name === categoryName);
+                              const relevant = hasCategory
+                                ? getPeerEvaluationsForEmployeeCategory(selectedEmp.id, categoryName)
+                                : getPeerEvaluationsForEmployee(selectedEmp.id);
+                              setEmployeeResponderSummary(
+                                buildResponderSummary(`Seleccionado: ${categoryName}`, relevant)
+                              );
+                            }}
                           >
-                            <Cell fill={getScoreRingColor(stats.overallPercent ?? 0)} />
-                            <Cell fill="#e2e8f0" />
+                            {employeeRingData.map((item, index) => (
+                              <Cell key={`employee-ring-${item.name}-${index}`} fill={item.color} />
+                            ))}
                           </Pie>
                         </PieChart>
                       </ResponsiveContainer>
@@ -1340,6 +1481,10 @@ const ResultsDashboard: React.FC<Props> = ({
                         <div className="text-xs font-semibold text-slate-500">Calificación general</div>
                       </div>
                     </div>
+                    {renderResponderSummary(
+                      employeeResponderSummary,
+                      'Haz clic en una sección del anillo para ver quiénes aportaron a ese resultado.'
+                    )}
                     <div className="mt-6">
                       <h4 className="font-semibold text-slate-800 mb-3">Comentarios sobre este empleado</h4>
                       {peerCommentsForEmployee.length > 0 ? (
@@ -1419,27 +1564,45 @@ const ResultsDashboard: React.FC<Props> = ({
                   </div>
                 </div>
               {overallPeerQuestionStats ? (
-                <div className="h-56" ref={overallPeerChartRef}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={overallPeerQuestionStats.questions}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                      <XAxis
-                        dataKey="name"
-                        interval={0}
-                        tick={{ fontSize: 10 }}
-                        tickFormatter={(value) => overallPeerAxisLabels[String(value)] ?? String(value)}
-                      />
-                      <YAxis domain={[0, 100]} tickFormatter={formatPercent} />
-                      <Tooltip content={renderScoreTooltip()} />
-                      <Bar dataKey="percent" radius={[4, 4, 0, 0]}>
-                        {overallPeerQuestionStats.questions.map((_, index) => (
-                          <Cell key={`peer-overall-${index}`} fill={getPastelColor(index)} />
-                        ))}
-                      </Bar>
-                    </BarChart>
+                <>
+                  <div className="h-56" ref={overallPeerChartRef}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={overallPeerQuestionStats.questions}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis
+                          dataKey="name"
+                          interval={0}
+                          tick={{ fontSize: 10 }}
+                          tickFormatter={(value) => overallPeerAxisLabels[String(value)] ?? String(value)}
+                        />
+                        <YAxis domain={[0, 100]} tickFormatter={formatPercent} />
+                        <Tooltip content={renderScoreTooltip()} />
+                        <Bar
+                          dataKey="percent"
+                          radius={[4, 4, 0, 0]}
+                          onClick={(data) => {
+                            const questionId = Number(data?.payload?.id ?? data?.id);
+                            if (!Number.isFinite(questionId)) return;
+                            const question = peerQuestionMap.get(questionId);
+                            const relevant = getPeerEvaluationsForQuestion(questionId);
+                            setPeerChartResponderSummary(
+                              buildResponderSummary(`Seleccionado: ${question?.text ?? 'Pregunta'}`, relevant)
+                            );
+                          }}
+                        >
+                          {overallPeerQuestionStats.questions.map((_, index) => (
+                            <Cell key={`peer-overall-${index}`} fill={getPastelColor(index)} />
+                          ))}
+                        </Bar>
+                      </BarChart>
                     </ResponsiveContainer>
                   </div>
-                ) : (
+                  {renderResponderSummary(
+                    peerChartResponderSummary,
+                    'Haz clic en una barra para ver quiénes respondieron esa pregunta.'
+                  )}
+                </>
+              ) : (
                   <div className="text-sm text-slate-400 bg-slate-50 border border-dashed rounded-xl p-6 text-center">
                     No hay evaluaciones de desempeño registradas.
                   </div>
@@ -1473,33 +1636,44 @@ const ResultsDashboard: React.FC<Props> = ({
                   </div>
                 </div>
               {overallInternalStats ? (
-                <div className="h-56" ref={overallInternalChartRef}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={overallInternalStats.categories} onClick={handleOverallInternalChartClick}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                      <XAxis
-                        dataKey="name"
-                        interval={0}
-                        tick={{ fontSize: 10 }}
-                        tickFormatter={(value) => overallInternalAxisLabels[String(value)] ?? String(value)}
-                      />
-                      <YAxis domain={[0, 100]} tickFormatter={formatPercent} />
-                      <Tooltip content={renderScoreTooltip()} />
-                      <Bar
-                        dataKey="percent"
-                        radius={[4, 4, 0, 0]}
-                        onClick={(data) => {
-                          const nextCategory = data?.payload?.name ?? data?.name;
-                          if (nextCategory) setSelectedInternalCategory(nextCategory);
-                        }}
-                      >
-                        {overallInternalStats.categories.map((_, index) => (
-                          <Cell key={`internal-overall-${index}`} fill={getPastelColor(index)} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
+                <>
+                  <div className="h-56" ref={overallInternalChartRef}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={overallInternalStats.categories} onClick={handleOverallInternalChartClick}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis
+                          dataKey="name"
+                          interval={0}
+                          tick={{ fontSize: 10 }}
+                          tickFormatter={(value) => overallInternalAxisLabels[String(value)] ?? String(value)}
+                        />
+                        <YAxis domain={[0, 100]} tickFormatter={formatPercent} />
+                        <Tooltip content={renderScoreTooltip()} />
+                        <Bar
+                          dataKey="percent"
+                          radius={[4, 4, 0, 0]}
+                          onClick={(data) => {
+                            const nextCategory = data?.payload?.name ?? data?.name;
+                            if (!nextCategory) return;
+                            setSelectedInternalCategory(nextCategory);
+                            const relevant = getInternalEvaluationsForCategory(nextCategory);
+                            setInternalChartResponderSummary(
+                              buildResponderSummary(`Seleccionado: ${nextCategory}`, relevant)
+                            );
+                          }}
+                        >
+                          {overallInternalStats.categories.map((_, index) => (
+                            <Cell key={`internal-overall-${index}`} fill={getPastelColor(index)} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                  {renderResponderSummary(
+                    internalChartResponderSummary,
+                    'Haz clic en una barra para ver quiénes respondieron esa sección.'
+                  )}
+                </>
               ) : (
                   <div className="text-sm text-slate-400 bg-slate-50 border border-dashed rounded-xl p-6 text-center">
                     No hay evaluaciones internas registradas.
@@ -1656,7 +1830,15 @@ const ResultsDashboard: React.FC<Props> = ({
                                                 return [`${value} (${pct}%)`, 'Respuestas'];
                                               }}
                                             />
-                                            <Bar dataKey="count" radius={[4, 4, 0, 0]} isAnimationActive={false}>
+                                            <Bar
+                                              dataKey="count"
+                                              radius={[4, 4, 0, 0]}
+                                              isAnimationActive={false}
+                                              onClick={(data) => {
+                                                const optionLabel = data?.payload?.name ?? data?.name;
+                                                handleInternalOptionChartClick(item.id, optionLabel);
+                                              }}
+                                            >
                                               {distribution.data.map((entry, index) => (
                                                 <Cell key={`dist-${item.id}-${index}`} fill={entry.color} />
                                               ))}
@@ -1679,6 +1861,10 @@ const ResultsDashboard: React.FC<Props> = ({
                                               cx="50%"
                                               cy="50%"
                                               isAnimationActive={false}
+                                              onClick={(data) => {
+                                                const optionLabel = data?.name ?? data?.payload?.name;
+                                                handleInternalOptionChartClick(item.id, optionLabel);
+                                              }}
                                             >
                                               {distribution.data.map((entry, index) => (
                                                 <Cell key={`dist-${item.id}-${index}`} fill={entry.color} />
@@ -1726,6 +1912,10 @@ const ResultsDashboard: React.FC<Props> = ({
                                       </div>
                                     )}
                                   </div>
+                                  {renderResponderSummary(
+                                    optionResponderSummaryByQuestion[item.id] ?? null,
+                                    'Haz clic en una barra o sección del pastel para ver quiénes eligieron esa opción.'
+                                  )}
                                 </div>
                               ) : (
                                 <div className="text-xs text-slate-400 bg-white border rounded-lg p-4">
