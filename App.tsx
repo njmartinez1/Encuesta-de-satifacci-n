@@ -1842,6 +1842,7 @@ const App: React.FC = () => {
               canSelectCampus={isAdmin || isManager}
               forcedCampus={isAdmin || isManager ? null : (currentUser?.campus ?? null)}
               showCommentAuthors={isAdmin || isManager || isPrincipal}
+              showAdminColumns={isAdmin}
             />
           </div>
         )}

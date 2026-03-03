@@ -20,6 +20,7 @@ interface Props {
   canSelectCampus?: boolean;
   forcedCampus?: string | null;
   showCommentAuthors?: boolean;
+  showAdminColumns?: boolean;
 }
 
 type ResponderSummary = {
@@ -42,6 +43,7 @@ const ResultsDashboard: React.FC<Props> = ({
   canSelectCampus = false,
   forcedCampus = null,
   showCommentAuthors = false,
+  showAdminColumns = false,
 }) => {
   const { showAlert } = useModal();
   const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null);
@@ -1594,6 +1596,9 @@ const ResultsDashboard: React.FC<Props> = ({
                     <thead>
                       <tr className="bg-slate-100 text-slate-600">
                         <th className="text-left px-3 py-2 font-semibold">Empleado</th>
+                        {showAdminColumns && (
+                          <th className="text-right px-3 py-2 font-semibold">MAXIMOS POSIBLES</th>
+                        )}
                         <th className="text-right px-3 py-2 font-semibold">TOTAL</th>
                         <th className="text-right px-3 py-2 font-semibold">AVERAGE</th>
                         {peerQuestions.map(question => (
@@ -1608,6 +1613,13 @@ const ResultsDashboard: React.FC<Props> = ({
                       {peerTableRows.map(row => (
                         <tr key={row.employee.id} className="border-t">
                           <td className="px-3 py-2 text-slate-700 whitespace-nowrap">{row.employee.name}</td>
+                          {showAdminColumns && (
+                            <td className="px-3 py-2 text-right font-semibold text-slate-700">
+                              {row.evaluationsCount > 0 && peerQuestions.length > 0
+                                ? row.evaluationsCount * peerQuestions.length
+                                : '-'}
+                            </td>
+                          )}
                           <td className="px-3 py-2 text-right font-semibold text-slate-700">
                             {row.totalOverall === null ? '-' : row.totalOverall}
                           </td>
