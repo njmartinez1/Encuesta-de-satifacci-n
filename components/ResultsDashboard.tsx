@@ -511,7 +511,7 @@ const ResultsDashboard: React.FC<Props> = ({
     return 'FFFFFFFF';
   };
   const openPeerExportModal = () => {
-    const exportableRows = peerTableRows.filter(row => row.hasData);
+    const exportableRows = peerTableRowsConsolidated.filter(row => row.hasData);
     if (peerQuestions.length === 0) {
       showAlert('No hay preguntas configuradas para exportar.');
       return;
@@ -532,7 +532,7 @@ const ResultsDashboard: React.FC<Props> = ({
     ));
   };
   const handleExportPeerMatrix = async () => {
-    const exportableRows = peerTableRows.filter(row => row.hasData);
+    const exportableRows = peerTableRowsConsolidated.filter(row => row.hasData);
     const selectedIds = new Set(peerExportSelectedIds);
     const selectedRows = exportableRows.filter(row => selectedIds.has(row.employee.id));
     if (selectedRows.length === 0) {
@@ -1446,6 +1446,12 @@ const ResultsDashboard: React.FC<Props> = ({
   const internalExportEvaluations = filterEvaluationsByQuestions(internalQuestionIds);
   const canExportPeer = peerQuestions.length > 0 && peerExportEvaluations.length > 0;
   const canExportInternal = internalQuestions.length > 0 && internalExportEvaluations.length > 0;
+  const peerTableRowsByAccount = filteredEmployees.map(employee => ({
+    employee,
+    memberIds: [employee.id],
+    memberNames: [employee.name],
+    ...getPeerQuestionTotalsForEmployeeIds([employee.id]),
+  }));
   const groupedEmployeeMap = new Map<string, Employee[]>();
   filteredEmployees.forEach((employee) => {
     const normalizedGroupId = normalizePersonGroupId(employee.personGroupId);
@@ -1454,7 +1460,7 @@ const ResultsDashboard: React.FC<Props> = ({
     list.push(employee);
     groupedEmployeeMap.set(key, list);
   });
-  const peerTableRows = Array.from(groupedEmployeeMap.values())
+  const peerTableRowsConsolidated = Array.from(groupedEmployeeMap.values())
     .map((members) => {
       const orderedMembers = [...members].sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
       const preferredEmployee = orderedMembers.find(member => isPuemboCampus(member.campus)) || orderedMembers[0];
@@ -1468,7 +1474,7 @@ const ResultsDashboard: React.FC<Props> = ({
       };
     })
     .sort((a, b) => a.employee.name.localeCompare(b.employee.name, 'es', { sensitivity: 'base' }));
-  const exportablePeerRows = peerTableRows.filter(row => row.hasData);
+  const exportablePeerRows = peerTableRowsConsolidated.filter(row => row.hasData);
   const normalizedPeerExportSearch = peerExportSearch.trim().toLowerCase();
   const filteredPeerExportRows = normalizedPeerExportSearch
     ? exportablePeerRows.filter(row => {
@@ -1483,10 +1489,10 @@ const ResultsDashboard: React.FC<Props> = ({
       })
     : exportablePeerRows;
   const employeeTableRows = normalizedEmployeeSearch
-    ? peerTableRows.filter(row => row.memberNames.some(memberName => memberName.toLowerCase().includes(normalizedEmployeeSearch)))
-    : peerTableRows;
+    ? peerTableRowsConsolidated.filter(row => row.memberNames.some(memberName => memberName.toLowerCase().includes(normalizedEmployeeSearch)))
+    : peerTableRowsConsolidated;
   const selectedPeerRow = selectedEmp
-    ? peerTableRows.find(row => row.employee.id === selectedEmp.id) || null
+    ? peerTableRowsConsolidated.find(row => row.employee.id === selectedEmp.id) || null
     : null;
   const selectedPeerEmployeeIds = selectedPeerRow?.memberIds || [];
   const stats = selectedPeerEmployeeIds.length > 0 ? getStatsForEmployeeIds(selectedPeerEmployeeIds) : null;
@@ -1499,14 +1505,14 @@ const ResultsDashboard: React.FC<Props> = ({
   const completedPeerCount = peerEvaluationsForSelected.length;
   const assignedPeerCount = selectedPeerEmployeeIds.reduce((sum, employeeId) => sum + (assignedCountByTarget[employeeId] || 0), 0);
   const displayAssignedPeerCount = assignedPeerCount > 0 ? assignedPeerCount : completedPeerCount;
-  const hasPeerTableData = peerTableRows.some(row => row.hasData);
+  const hasPeerTableDataGeneral = peerTableRowsByAccount.some(row => row.hasData);
 
   useEffect(() => {
     if (!selectedEmp) return;
-    if (!peerTableRows.some(row => row.employee.id === selectedEmp.id)) {
+    if (!peerTableRowsConsolidated.some(row => row.employee.id === selectedEmp.id)) {
       setSelectedEmp(null);
     }
-  }, [selectedEmp, peerTableRows]);
+  }, [selectedEmp, peerTableRowsConsolidated]);
 
   return (
     <div className="space-y-6">
@@ -1800,7 +1806,7 @@ const ResultsDashboard: React.FC<Props> = ({
                   <span className="text-xs text-slate-500">Promedio y % por pregunta</span>
                 </div>
               </div>
-              {hasPeerTableData ? (
+              {hasPeerTableDataGeneral ? (
                 <div className="overflow-x-auto">
                   <table className="min-w-[900px] w-full text-xs">
                     <thead>
@@ -1820,7 +1826,7 @@ const ResultsDashboard: React.FC<Props> = ({
                       </tr>
                     </thead>
                     <tbody>
-                      {peerTableRows.map(row => (
+                      {peerTableRowsByAccount.map(row => (
                         <tr key={row.employee.id} className="border-t">
                           <td className="px-3 py-2 text-slate-700 whitespace-nowrap">{row.employee.name}</td>
                           {showAdminColumns && (
