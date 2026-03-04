@@ -679,9 +679,12 @@ const ResultsDashboard: React.FC<Props> = ({
     const label = chartState?.activeLabel ?? chartState?.activePayload?.[0]?.payload?.name;
     if (label) setSelectedInternalCategory(label);
   };
-  const getPeerEvaluationsForEmployeeIds = (employeeIds: string[]) => {
+  const getPeerEvaluationsForEmployeeIds = (
+    employeeIds: string[],
+    evaluationList: Evaluation[] = filteredEvaluations
+  ) => {
     const employeeIdsSet = new Set(employeeIds);
-    return filteredEvaluations.filter(evaluation => (
+    return evaluationList.filter(evaluation => (
       employeeIdsSet.has(evaluation.evaluatedId)
       && Object.keys(evaluation.answers).some(questionId => peerQuestionIds.has(Number(questionId)))
     ));
@@ -709,9 +712,12 @@ const ResultsDashboard: React.FC<Props> = ({
     }));
   };
 
-  const getStatsForEmployeeIds = (employeeIds: string[]) => {
+  const getStatsForEmployeeIds = (
+    employeeIds: string[],
+    evaluationList: Evaluation[] = filteredEvaluations
+  ) => {
     const employeeIdsSet = new Set(employeeIds);
-    const relevant = filteredEvaluations.filter(e => {
+    const relevant = evaluationList.filter(e => {
       if (!employeeIdsSet.has(e.evaluatedId)) return false;
       return Object.keys(e.answers).some(qId => peerQuestionMap.has(parseInt(qId, 10)));
     });
@@ -1058,10 +1064,13 @@ const ResultsDashboard: React.FC<Props> = ({
     return { tag: match[1], text: (match[2] || '').trim() };
   };
 
-  const getPeerCommentsForEmployeeIds = (employeeIds: string[]) => {
+  const getPeerCommentsForEmployeeIds = (
+    employeeIds: string[],
+    evaluationList: Evaluation[] = filteredEvaluations
+  ) => {
     const employeeIdsSet = new Set(employeeIds);
     const results: { text: string; author: string }[] = [];
-    filteredEvaluations.forEach(evalu => {
+    evaluationList.forEach(evalu => {
       if (!employeeIdsSet.has(evalu.evaluatedId)) return;
       if (!Object.keys(evalu.answers).some(qId => peerQuestionMap.has(parseInt(qId, 10)))) return;
       const commentText = (evalu.comments || '').trim();
@@ -1240,9 +1249,12 @@ const ResultsDashboard: React.FC<Props> = ({
 
     return { total, data };
   };
-  const getPeerQuestionTotalsForEmployeeIds = (employeeIds: string[]) => {
+  const getPeerQuestionTotalsForEmployeeIds = (
+    employeeIds: string[],
+    evaluationList: Evaluation[] = filteredEvaluations
+  ) => {
     const employeeIdsSet = new Set(employeeIds);
-    const relevant = filteredEvaluations.filter(evaluation => (
+    const relevant = evaluationList.filter(evaluation => (
       employeeIdsSet.has(evaluation.evaluatedId)
       && Object.keys(evaluation.answers).some(questionId => peerQuestionIds.has(Number(questionId)))
     ));
@@ -1450,10 +1462,10 @@ const ResultsDashboard: React.FC<Props> = ({
     employee,
     memberIds: [employee.id],
     memberNames: [employee.name],
-    ...getPeerQuestionTotalsForEmployeeIds([employee.id]),
+    ...getPeerQuestionTotalsForEmployeeIds([employee.id], filteredEvaluations),
   }));
   const groupedEmployeeMap = new Map<string, Employee[]>();
-  filteredEmployees.forEach((employee) => {
+  employees.forEach((employee) => {
     const normalizedGroupId = normalizePersonGroupId(employee.personGroupId);
     const key = normalizedGroupId ? `pg:${normalizedGroupId}` : `emp:${employee.id}`;
     const list = groupedEmployeeMap.get(key) || [];
@@ -1470,7 +1482,7 @@ const ResultsDashboard: React.FC<Props> = ({
         employee: preferredEmployee,
         memberIds,
         memberNames,
-        ...getPeerQuestionTotalsForEmployeeIds(memberIds),
+        ...getPeerQuestionTotalsForEmployeeIds(memberIds, evaluations),
       };
     })
     .sort((a, b) => a.employee.name.localeCompare(b.employee.name, 'es', { sensitivity: 'base' }));
@@ -1495,12 +1507,12 @@ const ResultsDashboard: React.FC<Props> = ({
     ? peerTableRowsConsolidated.find(row => row.employee.id === selectedEmp.id) || null
     : null;
   const selectedPeerEmployeeIds = selectedPeerRow?.memberIds || [];
-  const stats = selectedPeerEmployeeIds.length > 0 ? getStatsForEmployeeIds(selectedPeerEmployeeIds) : null;
+  const stats = selectedPeerEmployeeIds.length > 0 ? getStatsForEmployeeIds(selectedPeerEmployeeIds, evaluations) : null;
   const peerCommentsForEmployee = selectedPeerEmployeeIds.length > 0
-    ? getPeerCommentsForEmployeeIds(selectedPeerEmployeeIds)
+    ? getPeerCommentsForEmployeeIds(selectedPeerEmployeeIds, evaluations)
     : [];
   const peerEvaluationsForSelected = selectedPeerEmployeeIds.length > 0
-    ? getPeerEvaluationsForEmployeeIds(selectedPeerEmployeeIds)
+    ? getPeerEvaluationsForEmployeeIds(selectedPeerEmployeeIds, evaluations)
     : [];
   const completedPeerCount = peerEvaluationsForSelected.length;
   const assignedPeerCount = selectedPeerEmployeeIds.reduce((sum, employeeId) => sum + (assignedCountByTarget[employeeId] || 0), 0);
@@ -1533,28 +1545,30 @@ const ResultsDashboard: React.FC<Props> = ({
             General
           </button>
         </div>
-        {canSelectCampus ? (
-          <div className="flex items-center gap-2 text-xs text-slate-500">
-            <label htmlFor="results-campus" className="font-semibold">Colegio</label>
-            <select
-              id="results-campus"
-              value={selectedCampus}
-              onChange={(event) => setSelectedCampus(event.target.value)}
-              className="border border-slate-200 rounded-md bg-white px-3 py-2 text-xs text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30"
-            >
-              <option value="all">Todos los colegios</option>
-              {campusOptions.map(campusOption => (
-                <option key={campusOption} value={campusOption}>{campusOption}</option>
-              ))}
-            </select>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2 text-xs text-slate-500">
-            <span className="font-semibold">Colegio</span>
-            <span className="border border-slate-200 rounded-md bg-slate-100 px-3 py-2 text-xs text-slate-700 shadow-sm">
-              {formatCampusLabel(forcedCampus || '')}
-            </span>
-          </div>
+        {viewMode === 'general' && (
+          canSelectCampus ? (
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <label htmlFor="results-campus" className="font-semibold">Colegio</label>
+              <select
+                id="results-campus"
+                value={selectedCampus}
+                onChange={(event) => setSelectedCampus(event.target.value)}
+                className="border border-slate-200 rounded-md bg-white px-3 py-2 text-xs text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30"
+              >
+                <option value="all">Todos los colegios</option>
+                {campusOptions.map(campusOption => (
+                  <option key={campusOption} value={campusOption}>{campusOption}</option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <span className="font-semibold">Colegio</span>
+              <span className="border border-slate-200 rounded-md bg-slate-100 px-3 py-2 text-xs text-slate-700 shadow-sm">
+                {formatCampusLabel(forcedCampus || '')}
+              </span>
+            </div>
+          )
         )}
       </div>
 
