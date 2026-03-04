@@ -16,6 +16,7 @@ type ProfileRow = {
   role: string | null;
   access_role: string | null;
   group_name: string | null;
+  area: string | null;
   campus: string | null;
   is_admin: boolean | null;
 };
@@ -102,6 +103,16 @@ const normalizeAccessRole = (value?: string | null): AccessRole => {
   if (normalized === 'educator') return 'educator';
   return 'educator';
 };
+const normalizeAreaName = (value?: string | null) => (value ?? '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .trim()
+  .toLowerCase();
+const getRequiredAreaByRole = (accessRole: AccessRole | undefined) => {
+  if (accessRole === 'principal') return 'academico';
+  if (accessRole === 'manager') return 'administrativo';
+  return null;
+};
 
 const mapProfile = (profile: ProfileRow): Employee => ({
   id: profile.id,
@@ -109,6 +120,7 @@ const mapProfile = (profile: ProfileRow): Employee => ({
   name: profile.name || profile.email || 'Sin nombre',
   role: profile.role || 'Sin cargo',
   group: profile.group_name || '',
+  area: profile.area || '',
   campus: profile.campus || '',
   isAdmin: Boolean(profile.is_admin),
   accessRole: profile.is_admin ? 'admin' : normalizeAccessRole(profile.access_role),
@@ -379,7 +391,7 @@ const App: React.FC = () => {
 
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
-        .select('id, email, name, role, group_name, campus, access_role, is_admin')
+        .select('id, email, name, role, group_name, area, campus, access_role, is_admin')
         .eq('id', session.user.id)
         .single();
 
@@ -421,7 +433,7 @@ const App: React.FC = () => {
         evaluationsRes,
         periodsRes,
       ] = await Promise.all([
-        supabase.from('profiles').select('id, email, name, role, group_name, campus, access_role, is_admin'),
+        supabase.from('profiles').select('id, email, name, role, group_name, area, campus, access_role, is_admin'),
         assignmentsQuery,
         evaluatorQuestionsQuery,
         evaluationsQuery,
@@ -469,6 +481,17 @@ const App: React.FC = () => {
       }
 
       const employeesList = (profilesRes.data || []).map((profile) => mapProfile(profile as ProfileRow));
+      const requiredArea = isAdmin ? null : getRequiredAreaByRole(userProfile.accessRole);
+      const visibleEmployeeIds = new Set(
+        (requiredArea
+          ? employeesList.filter(employee =>
+              employee.id === userProfile.id
+              || normalizeAreaName(employee.area) === requiredArea
+            )
+          : employeesList
+        ).map(employee => employee.id)
+      );
+      const scopedEmployees = employeesList.filter(employee => visibleEmployeeIds.has(employee.id));
       const questionsList = (questionsData || []).map(row => ({
         id: row.id,
         text: row.text,
@@ -519,6 +542,12 @@ const App: React.FC = () => {
         evaluatorId,
         targets,
       }));
+      const scopedAssignments = assignmentsList
+        .map((assignment) => ({
+          ...assignment,
+          targets: assignment.targets.filter(targetId => visibleEmployeeIds.has(targetId)),
+        }))
+        .filter(assignment => assignment.targets.length > 0 || assignment.evaluatorId === userProfile.id);
 
       const evaluatorRows = (evaluatorQuestionsRes.data || []) as EvaluatorQuestionRow[];
       const evaluatorMap: Record<string, number[]> = {};
@@ -527,7 +556,7 @@ const App: React.FC = () => {
         evaluatorMap[row.evaluator_id].push(row.question_id);
       });
       const questionIds = questionsList.map(question => question.id);
-      employeesList.forEach(emp => {
+      scopedEmployees.forEach(emp => {
         if (!evaluatorMap[emp.id]) evaluatorMap[emp.id] = questionIds;
       });
 
@@ -541,6 +570,9 @@ const App: React.FC = () => {
         isAnonymous: row.is_anonymous ?? false,
         timestamp: row.created_at ? new Date(row.created_at).toLocaleString() : '',
       }));
+      const scopedEvaluations = requiredArea
+        ? evaluationsList.filter(evaluation => visibleEmployeeIds.has(evaluation.evaluatedId))
+        : evaluationsList;
 
       const sectionOptions = buildSectionOptions(
         sectionOrderRes.error ? null : (sectionOrderRes.data as SectionOrderRow[] | null)
@@ -570,13 +602,13 @@ const App: React.FC = () => {
         return activePeriodFromList?.id ?? (periodsList[0]?.id ?? '');
       });
 
-      setEmployees(employeesList);
+      setEmployees(scopedEmployees);
       setQuestions(sortedQuestions);
       setCategories(categoriesList.length ? categoriesList : derivedCategories);
       setQuestionSections(sectionOptions);
-      setAssignments(assignmentsList);
+      setAssignments(scopedAssignments);
       setEvaluatorQuestions(evaluatorMap);
-      setEvaluations(evaluationsList);
+      setEvaluations(scopedEvaluations);
       setIsLoadingData(false);
     };
 
