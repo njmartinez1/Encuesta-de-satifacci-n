@@ -1250,6 +1250,8 @@ const ResultsDashboard: React.FC<Props> = ({
     employee,
     ...getPeerQuestionTotalsForEmployee(employee.id),
   }));
+  const filteredEmployeeIdsBySearch = new Set(filteredEmployeesBySearch.map(employee => employee.id));
+  const employeeTableRows = peerTableRows.filter(row => filteredEmployeeIdsBySearch.has(row.employee.id));
   const hasPeerTableData = peerTableRows.some(row => row.hasData);
   const employeeRingData = stats
     ? (stats.categories.length > 0
@@ -1310,145 +1312,136 @@ const ResultsDashboard: React.FC<Props> = ({
       </div>
 
       {viewMode === 'employee' ? (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-1 bg-white rounded-xl shadow-sm border overflow-hidden">
-            <div className="p-4 border-b bg-white">
+        <div className="space-y-6">
+          <div className="bg-white p-6 rounded-xl border">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
+              <h3 className="font-bold text-slate-800">Resultados por empleado (pares)</h3>
               <input
                 type="text"
                 value={employeeSearch}
                 onChange={(event) => setEmployeeSearch(event.target.value)}
                 placeholder="Buscar empleado..."
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30"
+                className="w-full sm:w-72 rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30"
               />
             </div>
-            <div className="divide-y max-h-[600px] overflow-y-auto">
-              {filteredEmployeesBySearch.length === 0 && (
-                <div className="p-4 text-xs text-slate-500 text-center">No se encontraron empleados.</div>
-              )}
-              {filteredEmployeesBySearch.map(emp => (
-                <button key={emp.id} onClick={() => setSelectedEmp(emp)} className={`w-full p-4 text-left transition-all ${selectedEmp?.id === emp.id ? 'bg-[var(--color-primary-tint)] border-l-4 border-[var(--color-primary)]' : ''}`}>
-                  <p className="font-semibold">{emp.name}</p>
-                  <p className="text-xs text-slate-500">{emp.role}</p>
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="lg:col-span-2 space-y-6">
-            {selectedEmp ? (
-              <>
-                {stats && (
-                  <div className="bg-white p-6 rounded-xl border">
-                    <div className="flex justify-between items-start mb-6">
-                      <div>
-                        <h3 className="font-bold flex items-center gap-2"><BarChart3 size={20} /> Rendimiento</h3>
-                        {selectedEmp && (
-                          <p className="text-xs text-slate-500">{completedPeerCount} de {displayAssignedPeerCount} evaluaciones completadas</p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-3">
-                        {!hideEmployeeExport && (
-                          <button
-                            onClick={handleExportEmployeePeer}
-                            className="text-[var(--color-primary)] flex items-center gap-2 text-xs font-bold"
-                          >
-                            <Download size={14} /> Exportar CSV
-                          </button>
-                        )}
-                        <button
-                          onClick={async () => {
-                            triggerCopied('employee-chart');
-                            await copyChartToClipboard(chartRef);
-                          }}
-                          className="text-[var(--color-primary)] flex items-center gap-2 text-xs font-bold focus:outline-none focus-visible:outline-none"
-                        >
-                          <Copy size={14} /> {copiedKey === 'employee-chart' ? 'Copiado' : 'Copiar imagen'}
-                        </button>
-                      </div>
-                    </div>
-                    <div className="h-64 relative" ref={chartRef}>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={employeeRingData}
-                            dataKey="value"
-                            innerRadius={70}
-                            outerRadius={95}
-                            stroke="none"
-                            startAngle={90}
-                            endAngle={-270}
-                            onClick={(entry) => {
-                              if (!selectedEmp) return;
-                              const categoryName = entry?.name ?? entry?.payload?.name;
-                              if (!categoryName) return;
-                              const hasCategory = stats.categories.some(category => category.name === categoryName);
-                              const relevant = hasCategory
-                                ? getPeerEvaluationsForEmployeeCategory(selectedEmp.id, categoryName)
-                                : getPeerEvaluationsForEmployee(selectedEmp.id);
-                              setEmployeeResponderSummary(
-                                buildResponderSummary(`Seleccionado: ${categoryName}`, relevant)
-                              );
-                            }}
-                          >
-                            {employeeRingData.map((item, index) => (
-                              <Cell key={`employee-ring-${item.name}-${index}`} fill={item.color} />
-                            ))}
-                          </Pie>
-                        </PieChart>
-                      </ResponsiveContainer>
-                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                        <div className="text-3xl font-bold text-slate-800">
-                          {stats.overallPercent ?? 0}%
-                        </div>
-                        <div className="text-xs font-semibold text-slate-500">Calificación general</div>
-                      </div>
-                    </div>
-                  {renderResponderSummary(
-                    employeeResponderSummary,
-                    'Haz clic en una sección del anillo para ver quiénes aportaron a ese resultado.',
-                    false
-                  )}
-                    <div className="mt-6">
-                      <h4 className="font-semibold text-slate-800 mb-3">Comentarios sobre este empleado</h4>
-                      {peerCommentsForEmployee.length > 0 ? (
-                        <div className="space-y-3">
-                      {peerCommentsForEmployee.map((comment, index) => (
-                        <div key={`peer-comment-${index}`} className="border rounded-lg p-4 text-sm text-slate-700 bg-slate-50">
-                          {showCommentAuthors && (
-                            <div className="text-xs font-semibold text-slate-500 mb-2">{comment.author}</div>
-                          )}
-                          {comment.text}
-                        </div>
+            {employeeTableRows.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-[780px] w-full text-xs">
+                  <thead>
+                    <tr className="bg-slate-100 text-slate-600">
+                      <th className="text-left px-3 py-2 font-semibold">Empleado</th>
+                      <th className="text-right px-3 py-2 font-semibold">% GENERAL</th>
+                      {peerQuestions.map(question => (
+                        <th key={`employee-peer-head-${question.id}`} className="text-right px-3 py-2 font-semibold">
+                          {question.text}
+                        </th>
                       ))}
-                        </div>
-                      ) : (
-                        <div className="text-sm text-slate-400 bg-slate-50 border border-dashed rounded-xl p-4 text-center">
-                          No hay comentarios registrados para este empleado.
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-                {stats && (
-                  <div className="bg-slate-900 rounded-xl p-6 text-white">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-xl font-bold flex items-center gap-2"><Sparkles size={24} className="text-[var(--color-primary)]" /> Análisis IA</h3>
-                      <button onClick={handleAIAnalysis} disabled={isAnalyzing} className="bg-[var(--color-primary)] px-4 py-2 rounded-lg text-sm font-bold disabled:opacity-50">
-                        {isAnalyzing ? 'Analizando...' : 'Analizar'}
-                      </button>
-                    </div>
-                    {aiAnalysis && <div className="bg-slate-800 p-4 rounded-lg text-slate-200 text-sm whitespace-pre-line">{aiAnalysis}</div>}
-                  </div>
-                )}
-                {!stats && !internalStats && (
-                  <div className="text-center py-20 bg-white rounded-xl border text-slate-400">
-                    No hay evaluaciones registradas para este empleado.
-                  </div>
-                )}
-              </>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {employeeTableRows.map(row => {
+                      const overallPercent = row.totalOverall === null || row.evaluationsCount === 0 || peerQuestions.length === 0
+                        ? null
+                        : Math.round(Math.min(100, Math.max(0, (row.totalOverall / (row.evaluationsCount * peerQuestions.length)) * 100)));
+                      return (
+                        <tr
+                          key={`employee-row-${row.employee.id}`}
+                          className={`border-t ${selectedEmp?.id === row.employee.id ? 'bg-[var(--color-primary-tint)]/40' : ''}`}
+                        >
+                          <td className="px-3 py-2 text-slate-700 whitespace-nowrap">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedEmp(row.employee)}
+                              className="font-semibold text-[var(--color-primary)] hover:underline"
+                            >
+                              {row.employee.name}
+                            </button>
+                          </td>
+                          <td className="px-3 py-2 text-right font-semibold text-slate-700">
+                            {overallPercent === null ? '-' : `${overallPercent}%`}
+                          </td>
+                          {row.percents.map((percent, index) => (
+                            <td key={`employee-percent-${row.employee.id}-${index}`} className="px-3 py-2 text-right text-slate-700">
+                              {percent === null ? '-' : `${percent}%`}
+                            </td>
+                          ))}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             ) : (
-              <div className="text-center py-20 bg-white rounded-xl border text-slate-400">Selecciona un empleado para ver resultados.</div>
+              <div className="text-sm text-slate-400 bg-slate-50 border border-dashed rounded-xl p-6 text-center">
+                No hay evaluaciones de pares para mostrar.
+              </div>
             )}
           </div>
+
+          {selectedEmp && stats ? (
+            <div className="bg-white p-6 rounded-xl border">
+              <div className="flex justify-between items-start mb-6">
+                <div>
+                  <h3 className="font-bold flex items-center gap-2"><BarChart3 size={20} /> {selectedEmp.name}</h3>
+                  <p className="text-xs text-slate-500">{completedPeerCount} de {displayAssignedPeerCount} evaluaciones completadas</p>
+                </div>
+                <button
+                  onClick={async () => {
+                    triggerCopied('employee-chart');
+                    await copyChartToClipboard(chartRef);
+                  }}
+                  className="text-[var(--color-primary)] flex items-center gap-2 text-xs font-bold focus:outline-none focus-visible:outline-none"
+                >
+                  <Copy size={14} /> {copiedKey === 'employee-chart' ? 'Copiado' : 'Copiar imagen'}
+                </button>
+              </div>
+              <div className="h-64 relative" ref={chartRef}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={employeeRingData}
+                      dataKey="value"
+                      innerRadius={70}
+                      outerRadius={95}
+                      stroke="none"
+                      startAngle={90}
+                      endAngle={-270}
+                    >
+                      {employeeRingData.map((item, index) => (
+                        <Cell key={`employee-ring-${item.name}-${index}`} fill={item.color} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <div className="text-3xl font-bold text-slate-800">
+                    {stats.overallPercent ?? 0}%
+                  </div>
+                  <div className="text-xs font-semibold text-slate-500">Calificación general</div>
+                </div>
+              </div>
+              <div className="mt-6">
+                <h4 className="font-semibold text-slate-800 mb-3">Comentarios sobre este empleado</h4>
+                {peerCommentsForEmployee.length > 0 ? (
+                  <div className="space-y-3">
+                    {peerCommentsForEmployee.map((comment, index) => (
+                      <div key={`peer-comment-${index}`} className="border rounded-lg p-4 text-sm text-slate-700 bg-slate-50">
+                        {comment.text}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-sm text-slate-400 bg-slate-50 border border-dashed rounded-xl p-4 text-center">
+                    No hay comentarios registrados para este empleado.
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-10 bg-white rounded-xl border text-slate-400">
+              Haz clic en un empleado de la tabla para ver su gráfico y comentarios.
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-6">
