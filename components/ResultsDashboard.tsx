@@ -1528,14 +1528,15 @@ const ResultsDashboard: React.FC<Props> = ({
               </div>
             </div>
             {employeeTableRows.length > 0 ? (
-              <div className="overflow-x-auto">
+              <div className="overflow-auto max-h-[68vh]">
                 <table className="min-w-[780px] w-full text-xs">
-                  <thead>
+                  <thead className="sticky top-0 z-20">
                     <tr className="bg-slate-100 text-slate-600">
-                      <th className="text-left px-3 py-2 font-semibold">Empleado</th>
-                      <th className="text-right px-3 py-2 font-semibold">% GENERAL</th>
+                      <th className="text-center px-3 py-2 font-semibold">Empleado</th>
+                      <th className="text-center px-3 py-2 font-semibold">EVALUACIONES</th>
+                      <th className="text-center px-3 py-2 font-semibold">% GENERAL</th>
                       {peerQuestions.map(question => (
-                        <th key={`employee-peer-head-${question.id}`} className="text-right px-3 py-2 font-semibold">
+                        <th key={`employee-peer-head-${question.id}`} className="text-center px-3 py-2 font-semibold">
                           {question.text}
                         </th>
                       ))}
@@ -1561,6 +1562,9 @@ const ResultsDashboard: React.FC<Props> = ({
                                 {row.employee.name}
                               </button>
                             </td>
+                            <td className="px-3 py-2 text-center font-semibold text-slate-600">
+                              {row.evaluationsCount}
+                            </td>
                             <td className="px-3 py-2 text-right font-semibold text-slate-700">
                               {renderMiniScoreRing(overallPercent)}
                             </td>
@@ -1578,7 +1582,7 @@ const ResultsDashboard: React.FC<Props> = ({
                           </tr>
                           {isExpanded && (
                             <tr className="border-t bg-slate-50/50">
-                              <td colSpan={2 + peerQuestions.length} className="px-3 py-4">
+                              <td colSpan={3 + peerQuestions.length} className="px-3 py-4">
                                 {stats ? (
                                   <div className="bg-white p-4 rounded-xl border">
                                     <div className="mb-4">
@@ -1799,11 +1803,7 @@ const ResultsDashboard: React.FC<Props> = ({
                                 ) : (
                                   <div className="flex flex-col items-end">
                                     <span className="font-semibold">{formatPointAverage(value)}</span>
-                                    {renderPercentWithBar(percent, {
-                                      textClassName: 'text-[10px] text-slate-500 font-medium',
-                                      barClassName: 'h-[2px] bg-slate-200',
-                                      containerClassName: 'inline-flex flex-col items-end leading-none',
-                                    })}
+                                    <span className="text-[10px] text-slate-500">{percent}%</span>
                                   </div>
                                 )}
                               </td>
