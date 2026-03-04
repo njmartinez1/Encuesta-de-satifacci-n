@@ -56,6 +56,9 @@ const ResultsDashboard: React.FC<Props> = ({
   const [employeeSearch, setEmployeeSearch] = useState('');
   const [employeeRoleFilter, setEmployeeRoleFilter] = useState('all');
   const [employeeCampusFilter, setEmployeeCampusFilter] = useState('all');
+  const [isPeerExportModalOpen, setIsPeerExportModalOpen] = useState(false);
+  const [peerExportSelectedIds, setPeerExportSelectedIds] = useState<string[]>([]);
+  const [peerExportSearch, setPeerExportSearch] = useState('');
   const [selectedInternalCategory, setSelectedInternalCategory] = useState('');
   const [aiAnalysis, setAiAnalysis] = useState<string>('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -500,49 +503,123 @@ const ResultsDashboard: React.FC<Props> = ({
     );
   };
 
-  const buildPeerMatrixCsv = () => {
-    const headers = [
-      'Empleado',
-      'AVERAGE',
-      ...peerQuestions.map(question => `${question.text} (%)`),
-    ];
-
-    const rows = peerTableRows.map(row => {
-      const overallPercent = row.totalOverall === null || row.evaluationsCount === 0 || peerQuestions.length === 0
-        ? null
-        : Math.round(Math.min(100, Math.max(0, (row.totalOverall / (row.evaluationsCount * peerQuestions.length)) * 100)));
-      const questionValues = peerQuestions.map((_, index) => {
-        const pct = row.percents[index];
-        return pct === null ? '' : pct;
-      });
-      return [
-        row.employee.name,
-        overallPercent === null ? '' : overallPercent,
-        ...questionValues,
-      ];
-    });
-
-    const delimiter = ';';
-    const lines = [headers, ...rows]
-      .map(row => row
-        .map(value => (typeof value === 'number' ? formatCsvNumber(value) : value))
-        .map(value => escapeCsvValueWithDelimiter(value, delimiter))
-        .join(delimiter))
-      .join('\n');
-    return `sep=${delimiter}\n${lines}`;
+  const getPeerMatrixOverallPercent = (row: { totalOverall: number | null; evaluationsCount: number }) => (
+    row.totalOverall === null || row.evaluationsCount === 0 || peerQuestions.length === 0
+      ? null
+      : Math.round(Math.min(100, Math.max(0, (row.totalOverall / (row.evaluationsCount * peerQuestions.length)) * 100))
+      )
+  );
+  const toExcelArgb = (hex: string) => {
+    const cleaned = hex.replace('#', '').toUpperCase();
+    if (cleaned.length === 6) return `FF${cleaned}`;
+    if (cleaned.length === 3) return `FF${cleaned.split('').map(ch => ch + ch).join('')}`;
+    return 'FFFFFFFF';
   };
-
-  const handleExportPeerMatrix = () => {
+  const openPeerExportModal = () => {
+    const exportableRows = peerTableRows.filter(row => row.hasData);
     if (peerQuestions.length === 0) {
       showAlert('No hay preguntas configuradas para exportar.');
       return;
     }
-    if (!hasPeerTableData) {
+    if (exportableRows.length === 0) {
       showAlert('No hay evaluaciones de pares para mostrar.');
       return;
     }
-    const csvContent = buildPeerMatrixCsv();
-    downloadCsv(buildFilename('resultados_empleados_pares'), csvContent);
+    setPeerExportSelectedIds(exportableRows.map(row => row.employee.id));
+    setPeerExportSearch('');
+    setIsPeerExportModalOpen(true);
+  };
+  const togglePeerExportSelection = (employeeId: string) => {
+    setPeerExportSelectedIds(prev => (
+      prev.includes(employeeId)
+        ? prev.filter(id => id !== employeeId)
+        : [...prev, employeeId]
+    ));
+  };
+  const handleExportPeerMatrix = async () => {
+    const exportableRows = peerTableRows.filter(row => row.hasData);
+    const selectedIds = new Set(peerExportSelectedIds);
+    const selectedRows = exportableRows.filter(row => selectedIds.has(row.employee.id));
+    if (selectedRows.length === 0) {
+      showAlert('Selecciona al menos un empleado para exportar.');
+      return;
+    }
+    const excel = await import('exceljs');
+    const workbook = new excel.Workbook();
+    const worksheet = workbook.addWorksheet('Resultados');
+    const headers = ['Empleado', 'Porcentaje total', ...peerQuestions.map(question => question.text)];
+
+    worksheet.addRow(headers);
+    worksheet.views = [{ state: 'frozen', ySplit: 1 }];
+    worksheet.getRow(1).height = 62;
+    worksheet.columns = [
+      { width: 38 },
+      { width: 18 },
+      ...peerQuestions.map(() => ({ width: 22 })),
+    ];
+
+    const headerRow = worksheet.getRow(1);
+    headerRow.eachCell((cell) => {
+      cell.font = { bold: true, color: { argb: 'FF111827' } };
+      cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFF1F5F9' },
+      };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+        left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+        bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+        right: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+      };
+    });
+
+    selectedRows.forEach((row) => {
+      const overallPercent = getPeerMatrixOverallPercent(row);
+      const percentValues = [overallPercent, ...row.percents];
+      const excelValues = percentValues.map(value => (value === null ? null : value / 100));
+      const dataRow = worksheet.addRow([row.employee.name, ...excelValues]);
+      dataRow.getCell(1).alignment = { vertical: 'middle', horizontal: 'left' };
+      dataRow.getCell(1).border = {
+        top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+      };
+      percentValues.forEach((percent, index) => {
+        const cell = dataRow.getCell(index + 2);
+        cell.numFmt = '0%';
+        cell.alignment = { vertical: 'middle', horizontal: 'center' };
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        };
+        if (percent !== null) {
+          cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: toExcelArgb(getScoreRingColor(percent)) },
+          };
+          cell.font = { color: { argb: 'FF111827' } };
+        }
+      });
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob(
+      [buffer],
+      { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }
+    );
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = buildFilename('resultados_empleados_pares').replace(/\.csv$/i, '.xlsx');
+    link.click();
+    URL.revokeObjectURL(url);
+    setIsPeerExportModalOpen(false);
   };
 
   const isZeroToTenQuestion = (question: Question) => {
@@ -1315,6 +1392,18 @@ const ResultsDashboard: React.FC<Props> = ({
     employee,
     ...getPeerQuestionTotalsForEmployee(employee.id),
   }));
+  const exportablePeerRows = peerTableRows.filter(row => row.hasData);
+  const normalizedPeerExportSearch = peerExportSearch.trim().toLowerCase();
+  const filteredPeerExportRows = normalizedPeerExportSearch
+    ? exportablePeerRows.filter(row => {
+        const name = (row.employee.name || '').toLowerCase();
+        const role = (row.employee.role || '').toLowerCase();
+        const campusName = (row.employee.campus || '').toLowerCase();
+        return name.includes(normalizedPeerExportSearch)
+          || role.includes(normalizedPeerExportSearch)
+          || campusName.includes(normalizedPeerExportSearch);
+      })
+    : exportablePeerRows;
   const filteredEmployeeIdsBySearch = new Set(filteredEmployeesByRoleAndCampus.map(employee => employee.id));
   const employeeTableRows = peerTableRows.filter(row => filteredEmployeeIdsBySearch.has(row.employee.id));
   const hasPeerTableData = peerTableRows.some(row => row.hasData);
@@ -1618,11 +1707,11 @@ const ResultsDashboard: React.FC<Props> = ({
                 <div className="flex items-center gap-3">
                   <span className="text-xs text-slate-500">Promedio y % por pregunta</span>
                   <button
-                    onClick={handleExportPeerMatrix}
+                    onClick={openPeerExportModal}
                     disabled={!hasPeerTableData || peerQuestions.length === 0}
                     className="text-[var(--color-primary)] flex items-center gap-2 text-xs font-bold disabled:opacity-50"
                   >
-                    <Download size={14} /> Exportar CSV
+                    <Download size={14} /> Exportar
                   </button>
                 </div>
               </div>
@@ -1893,6 +1982,103 @@ const ResultsDashboard: React.FC<Props> = ({
                   )}
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {isPeerExportModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+          <div className="w-full max-w-3xl bg-white rounded-2xl shadow-2xl border border-slate-100 p-6">
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <div>
+                <h3 className="text-lg font-bold text-slate-800">Exportar resultados</h3>
+                <p className="text-sm text-slate-500">
+                  Selecciona el personal que deseas incluir en el archivo XLSX.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPeerExportModalOpen(false)}
+                className="text-xs font-semibold text-slate-500 hover:text-slate-700"
+              >
+                Cerrar
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-3 mb-4">
+              <input
+                type="text"
+                value={peerExportSearch}
+                onChange={(event) => setPeerExportSearch(event.target.value)}
+                placeholder="Buscar por nombre, rol o campus..."
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30"
+              />
+              <button
+                type="button"
+                onClick={() => setPeerExportSelectedIds(exportablePeerRows.map(row => row.employee.id))}
+                className="px-3 py-2 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Seleccionar todo
+              </button>
+              <button
+                type="button"
+                onClick={() => setPeerExportSelectedIds([])}
+                className="px-3 py-2 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Limpiar
+              </button>
+            </div>
+
+            <div className="text-xs text-slate-500 mb-2">
+              {peerExportSelectedIds.length} seleccionado(s) de {exportablePeerRows.length}
+            </div>
+            <div className="max-h-72 overflow-y-auto border rounded-lg divide-y">
+              {filteredPeerExportRows.length > 0 ? (
+                filteredPeerExportRows.map(row => {
+                  const isChecked = peerExportSelectedIds.includes(row.employee.id);
+                  return (
+                    <label
+                      key={`export-row-${row.employee.id}`}
+                      className="flex items-start gap-3 p-3 text-sm hover:bg-slate-50 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => togglePeerExportSelection(row.employee.id)}
+                        className="mt-0.5"
+                      />
+                      <div>
+                        <div className="font-medium text-slate-700">{row.employee.name}</div>
+                        <div className="text-xs text-slate-500">
+                          {row.employee.role || 'Sin rol'} · {row.employee.campus || 'Sin campus'}
+                        </div>
+                      </div>
+                    </label>
+                  );
+                })
+              ) : (
+                <div className="p-4 text-sm text-slate-400 text-center">
+                  No hay personas que coincidan con la búsqueda.
+                </div>
+              )}
+            </div>
+
+            <div className="mt-5 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setIsPeerExportModalOpen(false)}
+                className="px-4 py-2 rounded-lg border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleExportPeerMatrix}
+                disabled={peerExportSelectedIds.length === 0}
+                className="px-4 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-semibold disabled:opacity-50"
+              >
+                Exportar XLSX
+              </button>
             </div>
           </div>
         </div>
