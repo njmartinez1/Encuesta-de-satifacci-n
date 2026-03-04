@@ -930,6 +930,57 @@ const ResultsDashboard: React.FC<Props> = ({
     }
     return mixHex(MID_COLOR, campusHighColor, (clamped - 50) / 50);
   };
+  const PASTEL_OPTION_COLORS = {
+    stronglyDisagree: '#F7B7B7', // rojo pastel
+    disagree: '#F8C9A6', // naranja pastel
+    agree: '#F6E6A8', // amarillo pastel
+    stronglyAgree: '#40CCA1', // verde (Puembo)
+  };
+  const PASTEL_SCALE_COLORS = [
+    '#F6C6D8',
+    '#F9D1B5',
+    '#F7E4B3',
+    '#DFF0B3',
+    '#BFE9CE',
+    '#BCE8E7',
+    '#BFDDF5',
+    '#D0CDF6',
+    '#E3C6F4',
+    '#F3C8E6',
+  ];
+  const PASTEL_OTHER_COLORS = [
+    '#C9D7F8',
+    '#D7C9F8',
+    '#F8C9EA',
+    '#C9EFF8',
+    '#CFEBCF',
+    '#EADBC9',
+  ];
+  const getInternalOptionColor = (question: Question, optionLabel: string, optionIndex: number) => {
+    if (isZeroToTenQuestion(question)) {
+      return PASTEL_SCALE_COLORS[optionIndex % PASTEL_SCALE_COLORS.length];
+    }
+    const normalized = normalizeOptionLabel(optionLabel);
+    if (
+      normalized.includes('totalmente en desacuerdo')
+      || normalized.includes('completamente en desacuerdo')
+    ) {
+      return PASTEL_OPTION_COLORS.stronglyDisagree;
+    }
+    if (normalized === 'en desacuerdo') {
+      return PASTEL_OPTION_COLORS.disagree;
+    }
+    if (normalized === 'de acuerdo') {
+      return PASTEL_OPTION_COLORS.agree;
+    }
+    if (
+      normalized.includes('totalmente de acuerdo')
+      || normalized.includes('completamente de acuerdo')
+    ) {
+      return PASTEL_OPTION_COLORS.stronglyAgree;
+    }
+    return PASTEL_OTHER_COLORS[optionIndex % PASTEL_OTHER_COLORS.length];
+  };
   const renderPercentWithBar = (
     percent: number,
     options?: {
@@ -1190,7 +1241,7 @@ const ResultsDashboard: React.FC<Props> = ({
         name: label,
         count,
         percent,
-        color: getScoreRingColor(percent),
+        color: getInternalOptionColor(question, label, index),
       };
     });
 

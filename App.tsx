@@ -1841,7 +1841,7 @@ const App: React.FC = () => {
               assignments={assignments}
               campus={currentUser?.campus ?? null}
               hideEmployeeMatrix={!isAdmin}
-              hideEmployeeTab={isPrincipal || isManager}
+              hideEmployeeTab={isReviewer}
               hideGeneralExport={isPrincipal || isReviewer || isManager}
               hideEmployeeExport={isReviewer}
               canSelectCampus={isAdmin || isManager}
