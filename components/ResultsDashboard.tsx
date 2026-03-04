@@ -1386,29 +1386,101 @@ const ResultsDashboard: React.FC<Props> = ({
                       const overallPercent = row.totalOverall === null || row.evaluationsCount === 0 || peerQuestions.length === 0
                         ? null
                         : Math.round(Math.min(100, Math.max(0, (row.totalOverall / (row.evaluationsCount * peerQuestions.length)) * 100)));
+                      const isExpanded = selectedEmp?.id === row.employee.id;
                       return (
-                        <tr
-                          key={`employee-row-${row.employee.id}`}
-                          className={`border-t ${selectedEmp?.id === row.employee.id ? 'bg-[var(--color-primary-tint)]/40' : ''}`}
-                        >
-                          <td className="px-3 py-2 text-slate-700 whitespace-nowrap">
-                            <button
-                              type="button"
-                              onClick={() => setSelectedEmp(row.employee)}
-                              className="font-semibold text-[var(--color-primary)] hover:underline"
-                            >
-                              {row.employee.name}
-                            </button>
-                          </td>
-                          <td className="px-3 py-2 text-right font-semibold text-slate-700">
-                            {overallPercent === null ? '-' : `${overallPercent}%`}
-                          </td>
-                          {row.percents.map((percent, index) => (
-                            <td key={`employee-percent-${row.employee.id}-${index}`} className="px-3 py-2 text-right text-slate-700">
-                              {percent === null ? '-' : `${percent}%`}
+                        <React.Fragment key={`employee-row-${row.employee.id}`}>
+                          <tr
+                            className={`border-t ${isExpanded ? 'bg-[var(--color-primary-tint)]/40' : ''}`}
+                          >
+                            <td className="px-3 py-2 text-slate-700 whitespace-nowrap">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedEmp(prev => (prev?.id === row.employee.id ? null : row.employee))}
+                                className="font-semibold text-[var(--color-primary)] hover:underline"
+                              >
+                                {row.employee.name}
+                              </button>
                             </td>
-                          ))}
-                        </tr>
+                            <td className="px-3 py-2 text-right font-semibold text-slate-700">
+                              {overallPercent === null ? '-' : `${overallPercent}%`}
+                            </td>
+                            {row.percents.map((percent, index) => (
+                              <td key={`employee-percent-${row.employee.id}-${index}`} className="px-3 py-2 text-right text-slate-700">
+                                {percent === null ? '-' : `${percent}%`}
+                              </td>
+                            ))}
+                          </tr>
+                          {isExpanded && (
+                            <tr className="border-t bg-slate-50/50">
+                              <td colSpan={2 + peerQuestions.length} className="px-3 py-4">
+                                {stats ? (
+                                  <div className="bg-white p-4 rounded-xl border">
+                                    <div className="flex justify-between items-start mb-4">
+                                      <div>
+                                        <h3 className="font-bold flex items-center gap-2"><BarChart3 size={18} /> {row.employee.name}</h3>
+                                        <p className="text-xs text-slate-500">{completedPeerCount} de {displayAssignedPeerCount} evaluaciones completadas</p>
+                                      </div>
+                                      <button
+                                        onClick={async () => {
+                                          triggerCopied('employee-chart');
+                                          await copyChartToClipboard(chartRef);
+                                        }}
+                                        className="text-[var(--color-primary)] flex items-center gap-2 text-xs font-bold focus:outline-none focus-visible:outline-none"
+                                      >
+                                        <Copy size={14} /> {copiedKey === 'employee-chart' ? 'Copiado' : 'Copiar imagen'}
+                                      </button>
+                                    </div>
+                                    <div className="h-56 relative" ref={chartRef}>
+                                      <ResponsiveContainer width="100%" height="100%">
+                                        <PieChart>
+                                          <Pie
+                                            data={employeeRingData}
+                                            dataKey="value"
+                                            innerRadius={60}
+                                            outerRadius={85}
+                                            stroke="none"
+                                            startAngle={90}
+                                            endAngle={-270}
+                                          >
+                                            {employeeRingData.map((item, index) => (
+                                              <Cell key={`employee-ring-${item.name}-${index}`} fill={item.color} />
+                                            ))}
+                                          </Pie>
+                                        </PieChart>
+                                      </ResponsiveContainer>
+                                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                                        <div className="text-2xl font-bold text-slate-800">
+                                          {stats.overallPercent ?? 0}%
+                                        </div>
+                                        <div className="text-xs font-semibold text-slate-500">Calificación general</div>
+                                      </div>
+                                    </div>
+                                    <div className="mt-4">
+                                      <h4 className="font-semibold text-slate-800 mb-2">Comentarios</h4>
+                                      {peerCommentsForEmployee.length > 0 ? (
+                                        <div className="space-y-2">
+                                          {peerCommentsForEmployee.map((comment, index) => (
+                                            <div key={`peer-comment-inline-${index}`} className="border rounded-lg p-3 text-sm text-slate-700 bg-slate-50">
+                                              {comment.text}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <div className="text-sm text-slate-400 bg-slate-50 border border-dashed rounded-xl p-4 text-center">
+                                          No hay comentarios registrados para este empleado.
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="text-sm text-slate-400 bg-white border border-dashed rounded-xl p-4 text-center">
+                                    No hay evaluaciones registradas para este empleado.
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
                       );
                     })}
                   </tbody>
@@ -1420,71 +1492,6 @@ const ResultsDashboard: React.FC<Props> = ({
               </div>
             )}
           </div>
-
-          {selectedEmp && stats ? (
-            <div className="bg-white p-6 rounded-xl border">
-              <div className="flex justify-between items-start mb-6">
-                <div>
-                  <h3 className="font-bold flex items-center gap-2"><BarChart3 size={20} /> {selectedEmp.name}</h3>
-                  <p className="text-xs text-slate-500">{completedPeerCount} de {displayAssignedPeerCount} evaluaciones completadas</p>
-                </div>
-                <button
-                  onClick={async () => {
-                    triggerCopied('employee-chart');
-                    await copyChartToClipboard(chartRef);
-                  }}
-                  className="text-[var(--color-primary)] flex items-center gap-2 text-xs font-bold focus:outline-none focus-visible:outline-none"
-                >
-                  <Copy size={14} /> {copiedKey === 'employee-chart' ? 'Copiado' : 'Copiar imagen'}
-                </button>
-              </div>
-              <div className="h-64 relative" ref={chartRef}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={employeeRingData}
-                      dataKey="value"
-                      innerRadius={70}
-                      outerRadius={95}
-                      stroke="none"
-                      startAngle={90}
-                      endAngle={-270}
-                    >
-                      {employeeRingData.map((item, index) => (
-                        <Cell key={`employee-ring-${item.name}-${index}`} fill={item.color} />
-                      ))}
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <div className="text-3xl font-bold text-slate-800">
-                    {stats.overallPercent ?? 0}%
-                  </div>
-                  <div className="text-xs font-semibold text-slate-500">Calificación general</div>
-                </div>
-              </div>
-              <div className="mt-6">
-                <h4 className="font-semibold text-slate-800 mb-3">Comentarios sobre este empleado</h4>
-                {peerCommentsForEmployee.length > 0 ? (
-                  <div className="space-y-3">
-                    {peerCommentsForEmployee.map((comment, index) => (
-                      <div key={`peer-comment-${index}`} className="border rounded-lg p-4 text-sm text-slate-700 bg-slate-50">
-                        {comment.text}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-sm text-slate-400 bg-slate-50 border border-dashed rounded-xl p-4 text-center">
-                    No hay comentarios registrados para este empleado.
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="text-center py-10 bg-white rounded-xl border text-slate-400">
-              Haz clic en un empleado de la tabla para ver su gráfico y comentarios.
-            </div>
-          )}
         </div>
       ) : (
         <div className="space-y-6">
