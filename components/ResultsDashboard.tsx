@@ -1,5 +1,5 @@
 ﻿
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Assignment, Evaluation, Employee, Question } from '../types.ts';
 import { DEFAULT_SCALE_SCORE_VALUES, getScaleRangeFromCount, getScorePercentage, getScaleScore } from '../scoreUtils.ts';
 import { analyzeEvaluations } from '../geminiService.ts';
@@ -519,7 +519,7 @@ const ResultsDashboard: React.FC<Props> = ({
     if (cleaned.length === 3) return `FF${cleaned.split('').map(ch => ch + ch).join('')}`;
     return 'FFFFFFFF';
   };
-  const openPeerExportModal = useCallback(() => {
+  const openPeerExportModal = () => {
     const exportableRows = peerTableRows.filter(row => row.hasData);
     if (peerQuestions.length === 0) {
       showAlert('No hay preguntas configuradas para exportar.');
@@ -532,7 +532,7 @@ const ResultsDashboard: React.FC<Props> = ({
     setPeerExportSelectedIds(exportableRows.map(row => row.employee.id));
     setPeerExportSearch('');
     setIsPeerExportModalOpen(true);
-  }, [peerQuestions, peerTableRows, showAlert]);
+  };
   const togglePeerExportSelection = (employeeId: string) => {
     setPeerExportSelectedIds(prev => (
       prev.includes(employeeId)
