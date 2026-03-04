@@ -1687,8 +1687,9 @@ const ResultsDashboard: React.FC<Props> = ({
               <h3 className="font-bold flex items-center gap-2"><TrendingUp size={20} /> Resumen general</h3>
               <span className="text-xs text-slate-500">Todas las evaluaciones</span>
             </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div>
+            <div className={showAdminColumns ? 'grid grid-cols-1 lg:grid-cols-2 gap-6' : 'grid grid-cols-1 gap-6 max-w-3xl mx-auto w-full'}>
+              {showAdminColumns && (
+                <div>
                 <div className="flex items-center justify-between mb-4">
                   <h4 className="font-semibold text-slate-800">Desempeño general</h4>
                   <div className="flex items-center gap-3">
@@ -1743,7 +1744,8 @@ const ResultsDashboard: React.FC<Props> = ({
                     No hay evaluaciones de desempeño registradas.
                   </div>
                 )}
-              </div>
+                </div>
+              )}
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <h4 className="font-semibold text-slate-800">Satisfacción interna (global)</h4>

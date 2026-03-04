@@ -1330,6 +1330,7 @@ const App: React.FC = () => {
   const isReviewer = !isAdmin && accessRole === 'reviewer';
   const isManager = !isAdmin && accessRole === 'manager';
   const canViewResults = isAdmin || isViewer || isPrincipal || isReviewer || isManager;
+  const canExportEmployeeResults = isAdmin || isPrincipal || isManager;
   const canViewSurvey = true;
   const activePeriodId = activePeriod?.id ?? '';
   const hasActivePeriod = Boolean(activePeriodId);
@@ -1856,7 +1857,7 @@ const App: React.FC = () => {
                     ))}
                   </select>
                 </label>
-                {isAdmin && resultsViewMode === 'employee' && (
+                {canExportEmployeeResults && resultsViewMode === 'employee' && (
                   <button
                     onClick={() => resultsEmployeeExportActionRef.current?.()}
                     className="flex items-center gap-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-dark)] text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-all"
