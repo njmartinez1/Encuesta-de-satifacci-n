@@ -930,6 +930,33 @@ const ResultsDashboard: React.FC<Props> = ({
     }
     return mixHex(MID_COLOR, campusHighColor, (clamped - 50) / 50);
   };
+  const renderPercentWithBar = (
+    percent: number,
+    options?: {
+      textClassName?: string;
+      barClassName?: string;
+      containerClassName?: string;
+    }
+  ) => {
+    const progress = Math.max(0, Math.min(100, Math.round(percent)));
+    const textClassName = options?.textClassName ?? 'text-xs font-semibold text-slate-700';
+    const barClassName = options?.barClassName ?? 'h-[3px] bg-slate-200';
+    const containerClassName = options?.containerClassName ?? 'inline-flex flex-col items-end leading-none';
+    return (
+      <span className={containerClassName}>
+        <span className={textClassName}>{progress}%</span>
+        <span className={`mt-1 w-full rounded-full overflow-hidden ${barClassName}`}>
+          <span
+            className="block h-full rounded-full"
+            style={{
+              width: `${progress}%`,
+              backgroundColor: getScoreRingColor(progress),
+            }}
+          />
+        </span>
+      </span>
+    );
+  };
   const renderMiniScoreRing = (percent: number | null) => {
     if (percent === null) return <span>-</span>;
     const progress = Math.max(0, Math.min(100, percent));
@@ -1539,7 +1566,13 @@ const ResultsDashboard: React.FC<Props> = ({
                             </td>
                             {row.percents.map((percent, index) => (
                               <td key={`employee-percent-${row.employee.id}-${index}`} className="px-3 py-2 text-right text-slate-700">
-                                {percent === null ? '-' : `${percent}%`}
+                                {percent === null
+                                  ? '-'
+                                  : renderPercentWithBar(percent, {
+                                    textClassName: 'text-xs font-semibold text-slate-700',
+                                    barClassName: 'h-[3px] bg-slate-200',
+                                    containerClassName: 'inline-flex flex-col items-end leading-none',
+                                  })}
                               </td>
                             ))}
                           </tr>
@@ -1766,7 +1799,11 @@ const ResultsDashboard: React.FC<Props> = ({
                                 ) : (
                                   <div className="flex flex-col items-end">
                                     <span className="font-semibold">{formatPointAverage(value)}</span>
-                                    <span className="text-[10px] text-slate-500">{percent}%</span>
+                                    {renderPercentWithBar(percent, {
+                                      textClassName: 'text-[10px] text-slate-500 font-medium',
+                                      barClassName: 'h-[2px] bg-slate-200',
+                                      containerClassName: 'inline-flex flex-col items-end leading-none',
+                                    })}
                                   </div>
                                 )}
                               </td>
