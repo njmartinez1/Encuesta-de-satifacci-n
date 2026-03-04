@@ -923,13 +923,17 @@ const ResultsDashboard: React.FC<Props> = ({
     : normalizedPaletteSource.includes('santa clara') || normalizedPaletteSource.includes('santaclara')
       ? SANTA_CLARA_HIGH_COLOR
       : DEFAULT_HIGH_COLOR;
-  const getScoreRingColor = (percent: number) => {
+  const getScoreColorWithHigh = (percent: number, highColor: string) => {
     const clamped = Math.min(100, Math.max(0, percent));
     if (clamped <= 50) {
       return mixHex(LOW_COLOR, MID_COLOR, clamped / 50);
     }
-    return mixHex(MID_COLOR, campusHighColor, (clamped - 50) / 50);
+    return mixHex(MID_COLOR, highColor, (clamped - 50) / 50);
   };
+  const getScoreRingColor = (percent: number) => {
+    return getScoreColorWithHigh(percent, campusHighColor);
+  };
+  const getEmployeeMatrixColor = (percent: number) => getScoreColorWithHigh(percent, PUEMBO_HIGH_COLOR);
   const PASTEL_OPTION_COLORS = {
     stronglyDisagree: '#F7B7B7', // rojo pastel
     disagree: '#F8C9A6', // naranja pastel
@@ -1001,7 +1005,7 @@ const ResultsDashboard: React.FC<Props> = ({
             className="block h-full rounded-full"
             style={{
               width: `${progress}%`,
-              backgroundColor: getScoreRingColor(progress),
+              backgroundColor: getEmployeeMatrixColor(progress),
             }}
           />
         </span>
@@ -1039,7 +1043,7 @@ const ResultsDashboard: React.FC<Props> = ({
               cy={center}
               r={radius}
               fill="none"
-              stroke={getScoreRingColor(progress)}
+              stroke={getEmployeeMatrixColor(progress)}
               strokeWidth={strokeWidth}
               strokeLinecap="round"
               strokeDasharray={circumference}
