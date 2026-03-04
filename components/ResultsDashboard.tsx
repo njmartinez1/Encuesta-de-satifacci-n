@@ -1,5 +1,5 @@
 ﻿
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Assignment, Evaluation, Employee, Question } from '../types.ts';
 import { DEFAULT_SCALE_SCORE_VALUES, getScaleRangeFromCount, getScorePercentage, getScaleScore } from '../scoreUtils.ts';
 import { analyzeEvaluations } from '../geminiService.ts';
@@ -21,6 +21,8 @@ interface Props {
   forcedCampus?: string | null;
   showCommentAuthors?: boolean;
   showAdminColumns?: boolean;
+  onViewModeChange?: (mode: 'employee' | 'general') => void;
+  onRegisterEmployeeExportAction?: (action: (() => void) | null) => void;
 }
 
 type ResponderSummary = {
@@ -44,6 +46,8 @@ const ResultsDashboard: React.FC<Props> = ({
   forcedCampus = null,
   showCommentAuthors = false,
   showAdminColumns = false,
+  onViewModeChange,
+  onRegisterEmployeeExportAction,
 }) => {
   const { showAlert } = useModal();
   const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null);
@@ -515,7 +519,7 @@ const ResultsDashboard: React.FC<Props> = ({
     if (cleaned.length === 3) return `FF${cleaned.split('').map(ch => ch + ch).join('')}`;
     return 'FFFFFFFF';
   };
-  const openPeerExportModal = () => {
+  const openPeerExportModal = useCallback(() => {
     const exportableRows = peerTableRows.filter(row => row.hasData);
     if (peerQuestions.length === 0) {
       showAlert('No hay preguntas configuradas para exportar.');
@@ -528,7 +532,7 @@ const ResultsDashboard: React.FC<Props> = ({
     setPeerExportSelectedIds(exportableRows.map(row => row.employee.id));
     setPeerExportSearch('');
     setIsPeerExportModalOpen(true);
-  };
+  }, [peerQuestions, peerTableRows, showAlert]);
   const togglePeerExportSelection = (employeeId: string) => {
     setPeerExportSelectedIds(prev => (
       prev.includes(employeeId)
@@ -1363,6 +1367,15 @@ const ResultsDashboard: React.FC<Props> = ({
   useEffect(() => {
     setOptionResponderSummaryByQuestion({});
   }, [selectedCampus, viewMode]);
+  useEffect(() => {
+    onViewModeChange?.(viewMode);
+  }, [viewMode, onViewModeChange]);
+  useEffect(() => {
+    onRegisterEmployeeExportAction?.(openPeerExportModal);
+    return () => {
+      onRegisterEmployeeExportAction?.(null);
+    };
+  }, [openPeerExportModal, onRegisterEmployeeExportAction]);
 
   const stats = selectedEmp ? getStatsForEmployee(selectedEmp.id) : null;
   const internalStats = selectedEmp ? getInternalStats(selectedEmp.id) : null;
@@ -1706,13 +1719,6 @@ const ResultsDashboard: React.FC<Props> = ({
                 <h3 className="font-bold text-slate-800">Resultados por empleado (pares)</h3>
                 <div className="flex items-center gap-3">
                   <span className="text-xs text-slate-500">Promedio y % por pregunta</span>
-                  <button
-                    onClick={openPeerExportModal}
-                    disabled={!hasPeerTableData || peerQuestions.length === 0}
-                    className="text-[var(--color-primary)] flex items-center gap-2 text-xs font-bold disabled:opacity-50"
-                  >
-                    <Download size={14} /> Exportar
-                  </button>
                 </div>
               </div>
               {hasPeerTableData ? (

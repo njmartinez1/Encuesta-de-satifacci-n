@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { AccessRole, Employee, Evaluation, EvaluationPeriod, Assignment, Question, QuestionCategory, QuestionSection, QuestionSectionOption, QuestionType } from './types.ts';
 import EvaluationForm from './components/EvaluationForm.tsx';
@@ -316,6 +316,8 @@ const App: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [resultsViewMode, setResultsViewMode] = useState<'employee' | 'general'>('employee');
+  const resultsEmployeeExportActionRef = useRef<(() => void) | null>(null);
   const theme = getThemeForCampus(currentUser?.campus);
   const themeStyle = {
     '--color-primary': theme.primary,
@@ -1822,9 +1824,12 @@ const App: React.FC = () => {
                     ))}
                   </select>
                 </label>
-                {isAdmin && (
-                  <button onClick={exportToCSV} className="flex items-center gap-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-dark)] text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-all" disabled={resultsEvaluations.length === 0}>
-                    <Download size={18} /> Exportar CSV
+                {isAdmin && resultsViewMode === 'employee' && (
+                  <button
+                    onClick={() => resultsEmployeeExportActionRef.current?.()}
+                    className="flex items-center gap-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-dark)] text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-all"
+                  >
+                    <Download size={18} /> Exportar
                   </button>
                 )}
               </div>
@@ -1843,6 +1848,8 @@ const App: React.FC = () => {
               forcedCampus={isAdmin || isManager ? null : (currentUser?.campus ?? null)}
               showCommentAuthors={isAdmin || isManager || isPrincipal}
               showAdminColumns={isAdmin}
+              onViewModeChange={setResultsViewMode}
+              onRegisterEmployeeExportAction={(action) => { resultsEmployeeExportActionRef.current = action; }}
             />
           </div>
         )}
