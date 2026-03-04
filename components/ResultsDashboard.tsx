@@ -1545,30 +1545,28 @@ const ResultsDashboard: React.FC<Props> = ({
             General
           </button>
         </div>
-        {viewMode === 'general' && (
-          canSelectCampus ? (
-            <div className="flex items-center gap-2 text-xs text-slate-500">
-              <label htmlFor="results-campus" className="font-semibold">Colegio</label>
-              <select
-                id="results-campus"
-                value={selectedCampus}
-                onChange={(event) => setSelectedCampus(event.target.value)}
-                className="border border-slate-200 rounded-md bg-white px-3 py-2 text-xs text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30"
-              >
-                <option value="all">Todos los colegios</option>
-                {campusOptions.map(campusOption => (
-                  <option key={campusOption} value={campusOption}>{campusOption}</option>
-                ))}
-              </select>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 text-xs text-slate-500">
-              <span className="font-semibold">Colegio</span>
-              <span className="border border-slate-200 rounded-md bg-slate-100 px-3 py-2 text-xs text-slate-700 shadow-sm">
-                {formatCampusLabel(forcedCampus || '')}
-              </span>
-            </div>
-          )
+        {canSelectCampus ? (
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <label htmlFor="results-campus" className="font-semibold">Colegio</label>
+            <select
+              id="results-campus"
+              value={selectedCampus}
+              onChange={(event) => setSelectedCampus(event.target.value)}
+              className="border border-slate-200 rounded-md bg-white px-3 py-2 text-xs text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30"
+            >
+              <option value="all">Todos los colegios</option>
+              {campusOptions.map(campusOption => (
+                <option key={campusOption} value={campusOption}>{campusOption}</option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <span className="font-semibold">Colegio</span>
+            <span className="border border-slate-200 rounded-md bg-slate-100 px-3 py-2 text-xs text-slate-700 shadow-sm">
+              {formatCampusLabel(forcedCampus || '')}
+            </span>
+          </div>
         )}
       </div>
 
