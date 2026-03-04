@@ -1478,15 +1478,22 @@ const ResultsDashboard: React.FC<Props> = ({
       const preferredEmployee = orderedMembers.find(member => isPuemboCampus(member.campus)) || orderedMembers[0];
       const memberIds = orderedMembers.map(member => member.id);
       const memberNames = orderedMembers.map(member => member.name);
+      const memberCampuses = orderedMembers.map(member => member.campus || '');
       return {
         employee: preferredEmployee,
         memberIds,
         memberNames,
+        memberCampuses,
         ...getPeerQuestionTotalsForEmployeeIds(memberIds, evaluations),
       };
     })
     .sort((a, b) => a.employee.name.localeCompare(b.employee.name, 'es', { sensitivity: 'base' }));
-  const exportablePeerRows = peerTableRowsConsolidated.filter(row => row.hasData);
+  const campusFilteredPeerTableRowsConsolidated = selectedCampus === 'all'
+    ? peerTableRowsConsolidated
+    : peerTableRowsConsolidated.filter(row =>
+        row.memberCampuses.some(campusName => campusMatches(campusName, normalizedSelectedCampus))
+      );
+  const exportablePeerRows = campusFilteredPeerTableRowsConsolidated.filter(row => row.hasData);
   const normalizedPeerExportSearch = peerExportSearch.trim().toLowerCase();
   const filteredPeerExportRows = normalizedPeerExportSearch
     ? exportablePeerRows.filter(row => {
@@ -1501,10 +1508,10 @@ const ResultsDashboard: React.FC<Props> = ({
       })
     : exportablePeerRows;
   const employeeTableRows = normalizedEmployeeSearch
-    ? peerTableRowsConsolidated.filter(row => row.memberNames.some(memberName => memberName.toLowerCase().includes(normalizedEmployeeSearch)))
-    : peerTableRowsConsolidated;
+    ? campusFilteredPeerTableRowsConsolidated.filter(row => row.memberNames.some(memberName => memberName.toLowerCase().includes(normalizedEmployeeSearch)))
+    : campusFilteredPeerTableRowsConsolidated;
   const selectedPeerRow = selectedEmp
-    ? peerTableRowsConsolidated.find(row => row.employee.id === selectedEmp.id) || null
+    ? campusFilteredPeerTableRowsConsolidated.find(row => row.employee.id === selectedEmp.id) || null
     : null;
   const selectedPeerEmployeeIds = selectedPeerRow?.memberIds || [];
   const stats = selectedPeerEmployeeIds.length > 0 ? getStatsForEmployeeIds(selectedPeerEmployeeIds, evaluations) : null;
@@ -1521,10 +1528,10 @@ const ResultsDashboard: React.FC<Props> = ({
 
   useEffect(() => {
     if (!selectedEmp) return;
-    if (!peerTableRowsConsolidated.some(row => row.employee.id === selectedEmp.id)) {
+    if (!employeeTableRows.some(row => row.employee.id === selectedEmp.id)) {
       setSelectedEmp(null);
     }
-  }, [selectedEmp, peerTableRowsConsolidated]);
+  }, [selectedEmp, employeeTableRows]);
 
   return (
     <div className="space-y-6">
