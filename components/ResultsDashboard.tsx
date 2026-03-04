@@ -996,7 +996,7 @@ const ResultsDashboard: React.FC<Props> = ({
     const progress = Math.max(0, Math.min(100, Math.round(percent)));
     const textClassName = options?.textClassName ?? 'text-xs font-semibold text-slate-700';
     const barClassName = options?.barClassName ?? 'h-[3px] bg-slate-200';
-    const containerClassName = options?.containerClassName ?? 'inline-flex flex-col items-end leading-none';
+    const containerClassName = options?.containerClassName ?? 'inline-flex flex-col items-center leading-none';
     return (
       <span className={containerClassName}>
         <span className={textClassName}>{progress}%</span>
@@ -1023,7 +1023,7 @@ const ResultsDashboard: React.FC<Props> = ({
     const dashOffset = circumference * (1 - progress / 100);
 
     return (
-      <div className="inline-flex items-center justify-end">
+      <div className="inline-flex items-center justify-center">
         <div className="relative w-11 h-11">
           <svg
             viewBox={`0 0 ${size} ${size}`}
@@ -1620,17 +1620,17 @@ const ResultsDashboard: React.FC<Props> = ({
                             <td className="px-3 py-2 text-center font-semibold text-slate-600">
                               {row.evaluationsCount}
                             </td>
-                            <td className="px-3 py-2 text-right font-semibold text-slate-700">
+                            <td className="px-3 py-2 text-center font-semibold text-slate-700">
                               {renderMiniScoreRing(overallPercent)}
                             </td>
                             {row.percents.map((percent, index) => (
-                              <td key={`employee-percent-${row.employee.id}-${index}`} className="px-3 py-2 text-right text-slate-700">
+                              <td key={`employee-percent-${row.employee.id}-${index}`} className="px-3 py-2 text-center text-slate-700">
                                 {percent === null
                                   ? '-'
                                   : renderPercentWithBar(percent, {
                                     textClassName: 'text-xs font-semibold text-slate-700',
                                     barClassName: 'h-[3px] bg-slate-200',
-                                    containerClassName: 'inline-flex flex-col items-end leading-none',
+                                    containerClassName: 'inline-flex flex-col items-center leading-none',
                                   })}
                               </td>
                             ))}
