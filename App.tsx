@@ -17,6 +17,7 @@ type ProfileRow = {
   access_role: string | null;
   group_name: string | null;
   area: string | null;
+  person_group_id: string | null;
   campus: string | null;
   is_admin: boolean | null;
 };
@@ -121,6 +122,7 @@ const mapProfile = (profile: ProfileRow): Employee => ({
   role: profile.role || 'Sin cargo',
   group: profile.group_name || '',
   area: profile.area || '',
+  personGroupId: profile.person_group_id || '',
   campus: profile.campus || '',
   isAdmin: Boolean(profile.is_admin),
   accessRole: profile.is_admin ? 'admin' : normalizeAccessRole(profile.access_role),
@@ -391,7 +393,7 @@ const App: React.FC = () => {
 
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
-        .select('id, email, name, role, group_name, area, campus, access_role, is_admin')
+        .select('id, email, name, role, group_name, area, person_group_id, campus, access_role, is_admin')
         .eq('id', session.user.id)
         .single();
 
@@ -433,7 +435,7 @@ const App: React.FC = () => {
         evaluationsRes,
         periodsRes,
       ] = await Promise.all([
-        supabase.from('profiles').select('id, email, name, role, group_name, area, campus, access_role, is_admin'),
+        supabase.from('profiles').select('id, email, name, role, group_name, area, person_group_id, campus, access_role, is_admin'),
         assignmentsQuery,
         evaluatorQuestionsQuery,
         evaluationsQuery,

@@ -299,6 +299,8 @@ const ResultsDashboard: React.FC<Props> = ({
     .replace(/\bcolegio\b/g, '')
     .replace(/[^a-z0-9]+/g, '')
     .trim();
+  const normalizePersonGroupId = (value: string | null | undefined) => (value || '').trim().toLowerCase();
+  const isPuemboCampus = (value: string | null | undefined) => normalizeCampusValue(value || '').includes('puembo');
 
   const campusOptions = Array.from(
     new Set(employees.map(emp => (emp.campus || '').trim()).filter(Boolean))
@@ -455,16 +457,16 @@ const ResultsDashboard: React.FC<Props> = ({
   };
 
   const handleExportEmployeePeer = () => {
-    if (!selectedEmp) {
+    if (!selectedPeerRow || selectedPeerRow.memberIds.length === 0) {
       showAlert('Selecciona un empleado para exportar.');
       return;
     }
     const evaluationsForEmployee = filterEvaluationsByQuestions(
       peerQuestionIds,
-      filteredEvaluations.filter(evaluation => evaluation.evaluatedId === selectedEmp.id)
+      filteredEvaluations.filter(evaluation => selectedPeerRow.memberIds.includes(evaluation.evaluatedId))
     );
     exportCsv(
-      buildFilename('evaluaciones_pares', selectedEmp.name),
+      buildFilename('evaluaciones_pares', selectedPeerRow.employee.name),
       evaluationsForEmployee,
       peerQuestions,
       'No hay evaluaciones de pares para este empleado.'
@@ -677,17 +679,13 @@ const ResultsDashboard: React.FC<Props> = ({
     const label = chartState?.activeLabel ?? chartState?.activePayload?.[0]?.payload?.name;
     if (label) setSelectedInternalCategory(label);
   };
-  const getPeerEvaluationsForEmployee = (empId: string) => filteredEvaluations.filter(evaluation => (
-    evaluation.evaluatedId === empId
-    && Object.keys(evaluation.answers).some(questionId => peerQuestionIds.has(Number(questionId)))
-  ));
-  const getPeerEvaluationsForEmployeeCategory = (empId: string, category: string) => filteredEvaluations.filter((evaluation) => {
-    if (evaluation.evaluatedId !== empId) return false;
-    return Object.keys(evaluation.answers).some((questionId) => {
-      const question = peerQuestionMap.get(Number(questionId));
-      return question?.category === category;
-    });
-  });
+  const getPeerEvaluationsForEmployeeIds = (employeeIds: string[]) => {
+    const employeeIdsSet = new Set(employeeIds);
+    return filteredEvaluations.filter(evaluation => (
+      employeeIdsSet.has(evaluation.evaluatedId)
+      && Object.keys(evaluation.answers).some(questionId => peerQuestionIds.has(Number(questionId)))
+    ));
+  };
   const getInternalEvaluationsForQuestionOption = (questionId: number, optionLabel: string) => {
     const question = internalQuestionMap.get(questionId);
     if (!question) return [];
@@ -711,9 +709,10 @@ const ResultsDashboard: React.FC<Props> = ({
     }));
   };
 
-  const getStatsForEmployee = (empId: string) => {
+  const getStatsForEmployeeIds = (employeeIds: string[]) => {
+    const employeeIdsSet = new Set(employeeIds);
     const relevant = filteredEvaluations.filter(e => {
-      if (e.evaluatedId !== empId) return false;
+      if (!employeeIdsSet.has(e.evaluatedId)) return false;
       return Object.keys(e.answers).some(qId => peerQuestionMap.has(parseInt(qId, 10)));
     });
     if (relevant.length === 0) return null;
@@ -1059,10 +1058,11 @@ const ResultsDashboard: React.FC<Props> = ({
     return { tag: match[1], text: (match[2] || '').trim() };
   };
 
-  const getPeerCommentsForEmployee = (empId: string) => {
+  const getPeerCommentsForEmployeeIds = (employeeIds: string[]) => {
+    const employeeIdsSet = new Set(employeeIds);
     const results: { text: string; author: string }[] = [];
     filteredEvaluations.forEach(evalu => {
-      if (evalu.evaluatedId !== empId) return;
+      if (!employeeIdsSet.has(evalu.evaluatedId)) return;
       if (!Object.keys(evalu.answers).some(qId => peerQuestionMap.has(parseInt(qId, 10)))) return;
       const commentText = (evalu.comments || '').trim();
       if (!commentText) return;
@@ -1240,9 +1240,10 @@ const ResultsDashboard: React.FC<Props> = ({
 
     return { total, data };
   };
-  const getPeerQuestionTotalsForEmployee = (empId: string) => {
+  const getPeerQuestionTotalsForEmployeeIds = (employeeIds: string[]) => {
+    const employeeIdsSet = new Set(employeeIds);
     const relevant = filteredEvaluations.filter(evaluation => (
-      evaluation.evaluatedId === empId
+      employeeIdsSet.has(evaluation.evaluatedId)
       && Object.keys(evaluation.answers).some(questionId => peerQuestionIds.has(Number(questionId)))
     ));
     const totals = new Map<number, number>();
@@ -1413,12 +1414,6 @@ const ResultsDashboard: React.FC<Props> = ({
     setSelectedInternalCategory(prev => (prev && internalCategories.includes(prev) ? prev : internalCategories[0]));
   }, [internalCategories]);
   useEffect(() => {
-    if (!selectedEmp) return;
-    if (!filteredEmployeesBySearch.some(employee => employee.id === selectedEmp.id)) {
-      setSelectedEmp(null);
-    }
-  }, [selectedEmp, filteredEmployeesBySearch]);
-  useEffect(() => {
     setOptionResponderSummaryByQuestion({});
   }, [selectedInternalCategory]);
   useEffect(() => {
@@ -1437,8 +1432,6 @@ const ResultsDashboard: React.FC<Props> = ({
     };
   }, [openPeerExportModal, onRegisterEmployeeExportAction]);
 
-  const stats = selectedEmp ? getStatsForEmployee(selectedEmp.id) : null;
-  const internalStats = selectedEmp ? getInternalStats(selectedEmp.id) : null;
   const overallPeerQuestionStats = getQuestionStats(peerQuestionMap);
   const overallInternalStats = getAggregateStats(internalQuestionMap);
   const overallPeerAxisLabels = buildAxisAbbreviations(
@@ -1449,22 +1442,32 @@ const ResultsDashboard: React.FC<Props> = ({
   );
   const internalCategoryComments = getCommentsForCategory(selectedInternalCategory, internalQuestionMap);
   const internalCategoryQuestionTotals = getQuestionTotalsForCategory(selectedInternalCategory);
-  const peerCommentsForEmployee = selectedEmp ? getPeerCommentsForEmployee(selectedEmp.id) : [];
-  const internalCommentsForEmployee = selectedEmp ? getInternalCommentsForEmployee(selectedEmp.id) : [];
-  const peerEvaluationsForSelected = selectedEmp
-    ? getPeerEvaluationsForEmployee(selectedEmp.id)
-    : [];
-  const completedPeerCount = peerEvaluationsForSelected.length;
-  const assignedPeerCount = selectedEmp ? (assignedCountByTarget[selectedEmp.id] || 0) : 0;
-  const displayAssignedPeerCount = assignedPeerCount > 0 ? assignedPeerCount : completedPeerCount; 
   const peerExportEvaluations = filterEvaluationsByQuestions(peerQuestionIds);
   const internalExportEvaluations = filterEvaluationsByQuestions(internalQuestionIds);
   const canExportPeer = peerQuestions.length > 0 && peerExportEvaluations.length > 0;
   const canExportInternal = internalQuestions.length > 0 && internalExportEvaluations.length > 0;
-  const peerTableRows = filteredEmployees.map(employee => ({
-    employee,
-    ...getPeerQuestionTotalsForEmployee(employee.id),
-  }));
+  const groupedEmployeeMap = new Map<string, Employee[]>();
+  filteredEmployees.forEach((employee) => {
+    const normalizedGroupId = normalizePersonGroupId(employee.personGroupId);
+    const key = normalizedGroupId ? `pg:${normalizedGroupId}` : `emp:${employee.id}`;
+    const list = groupedEmployeeMap.get(key) || [];
+    list.push(employee);
+    groupedEmployeeMap.set(key, list);
+  });
+  const peerTableRows = Array.from(groupedEmployeeMap.values())
+    .map((members) => {
+      const orderedMembers = [...members].sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
+      const preferredEmployee = orderedMembers.find(member => isPuemboCampus(member.campus)) || orderedMembers[0];
+      const memberIds = orderedMembers.map(member => member.id);
+      const memberNames = orderedMembers.map(member => member.name);
+      return {
+        employee: preferredEmployee,
+        memberIds,
+        memberNames,
+        ...getPeerQuestionTotalsForEmployeeIds(memberIds),
+      };
+    })
+    .sort((a, b) => a.employee.name.localeCompare(b.employee.name, 'es', { sensitivity: 'base' }));
   const exportablePeerRows = peerTableRows.filter(row => row.hasData);
   const normalizedPeerExportSearch = peerExportSearch.trim().toLowerCase();
   const filteredPeerExportRows = normalizedPeerExportSearch
@@ -1472,14 +1475,38 @@ const ResultsDashboard: React.FC<Props> = ({
         const name = (row.employee.name || '').toLowerCase();
         const role = (row.employee.role || '').toLowerCase();
         const campusName = (row.employee.campus || '').toLowerCase();
-        return name.includes(normalizedPeerExportSearch)
+        const memberNameMatches = row.memberNames.some(memberName => memberName.toLowerCase().includes(normalizedPeerExportSearch));
+        return memberNameMatches
+          || name.includes(normalizedPeerExportSearch)
           || role.includes(normalizedPeerExportSearch)
           || campusName.includes(normalizedPeerExportSearch);
       })
     : exportablePeerRows;
-  const filteredEmployeeIdsBySearch = new Set(filteredEmployeesBySearch.map(employee => employee.id));
-  const employeeTableRows = peerTableRows.filter(row => filteredEmployeeIdsBySearch.has(row.employee.id));
+  const employeeTableRows = normalizedEmployeeSearch
+    ? peerTableRows.filter(row => row.memberNames.some(memberName => memberName.toLowerCase().includes(normalizedEmployeeSearch)))
+    : peerTableRows;
+  const selectedPeerRow = selectedEmp
+    ? peerTableRows.find(row => row.employee.id === selectedEmp.id) || null
+    : null;
+  const selectedPeerEmployeeIds = selectedPeerRow?.memberIds || [];
+  const stats = selectedPeerEmployeeIds.length > 0 ? getStatsForEmployeeIds(selectedPeerEmployeeIds) : null;
+  const peerCommentsForEmployee = selectedPeerEmployeeIds.length > 0
+    ? getPeerCommentsForEmployeeIds(selectedPeerEmployeeIds)
+    : [];
+  const peerEvaluationsForSelected = selectedPeerEmployeeIds.length > 0
+    ? getPeerEvaluationsForEmployeeIds(selectedPeerEmployeeIds)
+    : [];
+  const completedPeerCount = peerEvaluationsForSelected.length;
+  const assignedPeerCount = selectedPeerEmployeeIds.reduce((sum, employeeId) => sum + (assignedCountByTarget[employeeId] || 0), 0);
+  const displayAssignedPeerCount = assignedPeerCount > 0 ? assignedPeerCount : completedPeerCount;
   const hasPeerTableData = peerTableRows.some(row => row.hasData);
+
+  useEffect(() => {
+    if (!selectedEmp) return;
+    if (!peerTableRows.some(row => row.employee.id === selectedEmp.id)) {
+      setSelectedEmp(null);
+    }
+  }, [selectedEmp, peerTableRows]);
 
   return (
     <div className="space-y-6">

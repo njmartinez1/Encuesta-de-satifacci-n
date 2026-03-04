@@ -6,6 +6,7 @@ export interface Employee {
   role: string;
   group: string;
   area: string;
+  personGroupId: string;
   campus: string;
   email: string;
   isAdmin: boolean;
