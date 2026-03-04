@@ -63,7 +63,6 @@ const ResultsDashboard: React.FC<Props> = ({
   const [optionResponderSummaryByQuestion, setOptionResponderSummaryByQuestion] = useState<Record<number, ResponderSummary | null>>({});
   const [expandedInternalQuestionId, setExpandedInternalQuestionId] = useState<number | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
-  const chartRef = useRef<HTMLDivElement>(null);
   const internalChartRef = useRef<HTMLDivElement>(null);
   const overallPeerChartRef = useRef<HTMLDivElement>(null);
   const overallInternalChartRef = useRef<HTMLDivElement>(null);
@@ -850,6 +849,51 @@ const ResultsDashboard: React.FC<Props> = ({
     }
     return mixHex(MID_COLOR, campusHighColor, (clamped - 50) / 50);
   };
+  const renderMiniScoreRing = (percent: number | null) => {
+    if (percent === null) return <span>-</span>;
+    const progress = Math.max(0, Math.min(100, percent));
+    const size = 44;
+    const strokeWidth = 4;
+    const center = size / 2;
+    const radius = center - strokeWidth - 1;
+    const circumference = 2 * Math.PI * radius;
+    const dashOffset = circumference * (1 - progress / 100);
+
+    return (
+      <div className="inline-flex items-center justify-end">
+        <div className="relative w-11 h-11">
+          <svg
+            viewBox={`0 0 ${size} ${size}`}
+            className="w-11 h-11 -rotate-90 overflow-visible"
+            aria-hidden="true"
+          >
+            <circle
+              cx={center}
+              cy={center}
+              r={radius}
+              fill="none"
+              stroke="#E2E8F0"
+              strokeWidth={strokeWidth}
+            />
+            <circle
+              cx={center}
+              cy={center}
+              r={radius}
+              fill="none"
+              stroke={getScoreRingColor(progress)}
+              strokeWidth={strokeWidth}
+              strokeLinecap="round"
+              strokeDasharray={circumference}
+              strokeDashoffset={dashOffset}
+            />
+          </svg>
+          <span className="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-slate-700">
+            {progress}%
+          </span>
+        </div>
+      </div>
+    );
+  };
 
   const splitCommentBlocks = (commentText: string) => commentText
     .split(/\n{2,}/)
@@ -1274,19 +1318,6 @@ const ResultsDashboard: React.FC<Props> = ({
   const filteredEmployeeIdsBySearch = new Set(filteredEmployeesByRoleAndCampus.map(employee => employee.id));
   const employeeTableRows = peerTableRows.filter(row => filteredEmployeeIdsBySearch.has(row.employee.id));
   const hasPeerTableData = peerTableRows.some(row => row.hasData);
-  const employeeRingData = stats
-    ? (stats.categories.length > 0
-      ? stats.categories.map(category => ({
-        name: category.name,
-        value: Math.max(0, category.percent),
-        color: getScoreRingColor(category.percent),
-      }))
-      : [{
-        name: 'Calificación',
-        value: Math.max(0, stats.overallPercent ?? 0),
-        color: getScoreRingColor(stats.overallPercent ?? 0),
-      }])
-    : [];
 
   return (
     <div className="space-y-6">
@@ -1402,7 +1433,7 @@ const ResultsDashboard: React.FC<Props> = ({
                               </button>
                             </td>
                             <td className="px-3 py-2 text-right font-semibold text-slate-700">
-                              {overallPercent === null ? '-' : `${overallPercent}%`}
+                              {renderMiniScoreRing(overallPercent)}
                             </td>
                             {row.percents.map((percent, index) => (
                               <td key={`employee-percent-${row.employee.id}-${index}`} className="px-3 py-2 text-right text-slate-700">
@@ -1415,62 +1446,24 @@ const ResultsDashboard: React.FC<Props> = ({
                               <td colSpan={2 + peerQuestions.length} className="px-3 py-4">
                                 {stats ? (
                                   <div className="bg-white p-4 rounded-xl border">
-                                    <div className="flex justify-between items-start mb-4">
-                                      <div>
-                                        <h3 className="font-bold flex items-center gap-2"><BarChart3 size={18} /> {row.employee.name}</h3>
-                                        <p className="text-xs text-slate-500">{completedPeerCount} de {displayAssignedPeerCount} evaluaciones completadas</p>
+                                    <div className="mb-4">
+                                      <h3 className="font-bold flex items-center gap-2"><BarChart3 size={18} /> {row.employee.name}</h3>
+                                      <p className="text-xs text-slate-500">{completedPeerCount} de {displayAssignedPeerCount} evaluaciones completadas</p>
+                                    </div>
+                                    <h4 className="font-semibold text-slate-800 mb-2">Comentarios</h4>
+                                    {peerCommentsForEmployee.length > 0 ? (
+                                      <div className="space-y-2">
+                                        {peerCommentsForEmployee.map((comment, index) => (
+                                          <div key={`peer-comment-inline-${index}`} className="border rounded-lg p-3 text-sm text-slate-700 bg-slate-50">
+                                            {comment.text}
+                                          </div>
+                                        ))}
                                       </div>
-                                      <button
-                                        onClick={async () => {
-                                          triggerCopied('employee-chart');
-                                          await copyChartToClipboard(chartRef);
-                                        }}
-                                        className="text-[var(--color-primary)] flex items-center gap-2 text-xs font-bold focus:outline-none focus-visible:outline-none"
-                                      >
-                                        <Copy size={14} /> {copiedKey === 'employee-chart' ? 'Copiado' : 'Copiar imagen'}
-                                      </button>
-                                    </div>
-                                    <div className="h-56 relative" ref={chartRef}>
-                                      <ResponsiveContainer width="100%" height="100%">
-                                        <PieChart>
-                                          <Pie
-                                            data={employeeRingData}
-                                            dataKey="value"
-                                            innerRadius={60}
-                                            outerRadius={85}
-                                            stroke="none"
-                                            startAngle={90}
-                                            endAngle={-270}
-                                          >
-                                            {employeeRingData.map((item, index) => (
-                                              <Cell key={`employee-ring-${item.name}-${index}`} fill={item.color} />
-                                            ))}
-                                          </Pie>
-                                        </PieChart>
-                                      </ResponsiveContainer>
-                                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                                        <div className="text-2xl font-bold text-slate-800">
-                                          {stats.overallPercent ?? 0}%
-                                        </div>
-                                        <div className="text-xs font-semibold text-slate-500">Calificación general</div>
+                                    ) : (
+                                      <div className="text-sm text-slate-400 bg-slate-50 border border-dashed rounded-xl p-4 text-center">
+                                        No hay comentarios registrados para este empleado.
                                       </div>
-                                    </div>
-                                    <div className="mt-4">
-                                      <h4 className="font-semibold text-slate-800 mb-2">Comentarios</h4>
-                                      {peerCommentsForEmployee.length > 0 ? (
-                                        <div className="space-y-2">
-                                          {peerCommentsForEmployee.map((comment, index) => (
-                                            <div key={`peer-comment-inline-${index}`} className="border rounded-lg p-3 text-sm text-slate-700 bg-slate-50">
-                                              {comment.text}
-                                            </div>
-                                          ))}
-                                        </div>
-                                      ) : (
-                                        <div className="text-sm text-slate-400 bg-slate-50 border border-dashed rounded-xl p-4 text-center">
-                                          No hay comentarios registrados para este empleado.
-                                        </div>
-                                      )}
-                                    </div>
+                                    )}
                                   </div>
                                 ) : (
                                   <div className="text-sm text-slate-400 bg-white border border-dashed rounded-xl p-4 text-center">
