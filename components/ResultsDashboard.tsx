@@ -1229,10 +1229,10 @@ const ResultsDashboard: React.FC<Props> = ({
 
   useEffect(() => {
     if (!selectedEmp) return;
-    if (!filteredEmployeeIdsBySearch.has(selectedEmp.id)) {
+    if (!filteredEmployeesByRoleAndCampus.some(employee => employee.id === selectedEmp.id)) {
       setSelectedEmp(null);
     }
-  }, [selectedEmp, filteredEmployeeIdsBySearch]);
+  }, [selectedEmp, filteredEmployeesByRoleAndCampus]);
   useEffect(() => {
     setOptionResponderSummaryByQuestion({});
   }, [selectedInternalCategory]);
