@@ -58,8 +58,6 @@ const ResultsDashboard: React.FC<Props> = ({
     !canSelectCampus && forcedCampus ? forcedCampus : 'all'
   ));
   const [employeeSearch, setEmployeeSearch] = useState('');
-  const [employeeRoleFilter, setEmployeeRoleFilter] = useState('all');
-  const [employeeCampusFilter, setEmployeeCampusFilter] = useState('all');
   const [isPeerExportModalOpen, setIsPeerExportModalOpen] = useState(false);
   const [peerExportSelectedIds, setPeerExportSelectedIds] = useState<string[]>([]);
   const [peerExportSearch, setPeerExportSearch] = useState('');
@@ -318,24 +316,15 @@ const ResultsDashboard: React.FC<Props> = ({
     ? employees
     : employees.filter(emp => campusMatches(emp.campus || '', normalizedSelectedCampus));
   const filteredEmployeeIds = new Set(filteredEmployees.map(emp => emp.id));
-  const employeeRoleOptions = Array.from(
-    new Set(filteredEmployees.map(emp => (emp.role || '').trim()).filter(Boolean))
-  ).sort((a, b) => a.localeCompare(b, 'es'));
-  const employeeCampusFilterOptions = Array.from(
-    new Set(filteredEmployees.map(emp => (emp.campus || '').trim()).filter(Boolean))
-  ).sort((a, b) => a.localeCompare(b, 'es'));
   const normalizedEmployeeSearch = employeeSearch.trim().toLowerCase();
-  const filteredEmployeesBySearch = normalizedEmployeeSearch
-    ? filteredEmployees.filter(emp => {
-        const name = (emp.name || '').toLowerCase();
-        return name.includes(normalizedEmployeeSearch);
-      })
-    : filteredEmployees;
-  const filteredEmployeesByRoleAndCampus = filteredEmployeesBySearch.filter(emp => {
-    const roleMatches = employeeRoleFilter === 'all' || (emp.role || '') === employeeRoleFilter;
-    const campusMatchesFilter = employeeCampusFilter === 'all' || (emp.campus || '') === employeeCampusFilter;
-    return roleMatches && campusMatchesFilter;
-  });
+  const filteredEmployeesBySearch = (
+    normalizedEmployeeSearch
+      ? filteredEmployees.filter(emp => {
+          const name = (emp.name || '').toLowerCase();
+          return name.includes(normalizedEmployeeSearch);
+        })
+      : filteredEmployees
+  ).slice().sort((a, b) => (a.name || '').localeCompare((b.name || ''), 'es', { sensitivity: 'base' }));
   const filteredEvaluations = selectedCampus === 'all'
     ? evaluations
     : evaluations.filter(evaluation =>
@@ -1424,22 +1413,11 @@ const ResultsDashboard: React.FC<Props> = ({
     setSelectedInternalCategory(prev => (prev && internalCategories.includes(prev) ? prev : internalCategories[0]));
   }, [internalCategories]);
   useEffect(() => {
-    if (employeeRoleFilter !== 'all' && !employeeRoleOptions.includes(employeeRoleFilter)) {
-      setEmployeeRoleFilter('all');
-    }
-  }, [employeeRoleFilter, employeeRoleOptions]);
-  useEffect(() => {
-    if (employeeCampusFilter !== 'all' && !employeeCampusFilterOptions.includes(employeeCampusFilter)) {
-      setEmployeeCampusFilter('all');
-    }
-  }, [employeeCampusFilter, employeeCampusFilterOptions]);
-
-  useEffect(() => {
     if (!selectedEmp) return;
-    if (!filteredEmployeesByRoleAndCampus.some(employee => employee.id === selectedEmp.id)) {
+    if (!filteredEmployeesBySearch.some(employee => employee.id === selectedEmp.id)) {
       setSelectedEmp(null);
     }
-  }, [selectedEmp, filteredEmployeesByRoleAndCampus]);
+  }, [selectedEmp, filteredEmployeesBySearch]);
   useEffect(() => {
     setOptionResponderSummaryByQuestion({});
   }, [selectedInternalCategory]);
@@ -1499,7 +1477,7 @@ const ResultsDashboard: React.FC<Props> = ({
           || campusName.includes(normalizedPeerExportSearch);
       })
     : exportablePeerRows;
-  const filteredEmployeeIdsBySearch = new Set(filteredEmployeesByRoleAndCampus.map(employee => employee.id));
+  const filteredEmployeeIdsBySearch = new Set(filteredEmployeesBySearch.map(employee => employee.id));
   const employeeTableRows = peerTableRows.filter(row => filteredEmployeeIdsBySearch.has(row.employee.id));
   const hasPeerTableData = peerTableRows.some(row => row.hasData);
 
@@ -1552,7 +1530,7 @@ const ResultsDashboard: React.FC<Props> = ({
           <div className="bg-white p-6 rounded-xl border">
             <div className="space-y-3 mb-4">
               <h3 className="font-bold text-slate-800">Resultados por empleado (pares)</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 gap-3">
                 <input
                   type="text"
                   value={employeeSearch}
@@ -1560,26 +1538,6 @@ const ResultsDashboard: React.FC<Props> = ({
                   placeholder="Buscar por nombre..."
                   className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30"
                 />
-                <select
-                  value={employeeRoleFilter}
-                  onChange={(event) => setEmployeeRoleFilter(event.target.value)}
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30"
-                >
-                  <option value="all">Todos los roles</option>
-                  {employeeRoleOptions.map(role => (
-                    <option key={`role-filter-${role}`} value={role}>{role}</option>
-                  ))}
-                </select>
-                <select
-                  value={employeeCampusFilter}
-                  onChange={(event) => setEmployeeCampusFilter(event.target.value)}
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30"
-                >
-                  <option value="all">Todos los campus</option>
-                  {employeeCampusFilterOptions.map(campusName => (
-                    <option key={`campus-filter-${campusName}`} value={campusName}>{campusName}</option>
-                  ))}
-                </select>
               </div>
             </div>
             {employeeTableRows.length > 0 ? (
