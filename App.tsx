@@ -44,6 +44,43 @@ type PeriodRow = {
 };
 
 type SectionOrderRow = { section: string | null; sort_order: number | null };
+const isMissingColumnError = (error: { message?: string } | null | undefined, columnName: string) =>
+  Boolean(error?.message && error.message.toLowerCase().includes(columnName.toLowerCase()));
+const PROFILE_OPTIONAL_COLUMNS = ['area', 'person_group_id'] as const;
+const PROFILE_BASE_COLUMNS = ['id', 'email', 'name', 'role', 'group_name', 'campus', 'access_role', 'is_admin'] as const;
+const PROFILE_ALL_COLUMNS = [...PROFILE_BASE_COLUMNS, ...PROFILE_OPTIONAL_COLUMNS] as const;
+
+const buildProfileSelect = (columns: readonly string[]) => columns.join(', ');
+const toProfileRow = (row: Record<string, unknown> | null): ProfileRow | null => {
+  if (!row) return null;
+  return {
+    id: String(row.id ?? ''),
+    email: (row.email as string | null) ?? null,
+    name: (row.name as string | null) ?? null,
+    role: (row.role as string | null) ?? null,
+    access_role: (row.access_role as string | null) ?? null,
+    group_name: (row.group_name as string | null) ?? null,
+    area: (row.area as string | null) ?? null,
+    person_group_id: (row.person_group_id as string | null) ?? null,
+    campus: (row.campus as string | null) ?? null,
+    is_admin: (row.is_admin as boolean | null) ?? null,
+  };
+};
+
+const removeMissingOptionalColumns = (
+  columns: readonly string[],
+  error: { message?: string } | null | undefined
+) => {
+  let nextColumns = [...columns];
+  let removedAny = false;
+  PROFILE_OPTIONAL_COLUMNS.forEach((column) => {
+    if (nextColumns.includes(column) && isMissingColumnError(error, column)) {
+      nextColumns = nextColumns.filter(value => value !== column);
+      removedAny = true;
+    }
+  });
+  return { columns: nextColumns, removedAny };
+};
 
 const DEFAULT_SECTION_OPTIONS: QuestionSectionOption[] = [
   { value: 'peer', label: 'Evaluación de pares' },
@@ -111,7 +148,7 @@ const normalizeAreaName = (value?: string | null) => (value ?? '')
   .toLowerCase();
 const getRequiredAreaByRole = (accessRole: AccessRole | undefined) => {
   if (accessRole === 'principal') return 'academico';
-  if (accessRole === 'manager') return 'administrativo';
+  if (accessRole === 'manager') return null;
   return null;
 };
 
@@ -391,11 +428,30 @@ const App: React.FC = () => {
       setIsLoadingData(true);
       setAuthError(null);
 
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('id, email, name, role, group_name, area, person_group_id, campus, access_role, is_admin')
-        .eq('id', session.user.id)
-        .single();
+      let profileData: ProfileRow | null = null;
+      let profileError: { message?: string } | null = null;
+      {
+        let profileColumns: string[] = [...PROFILE_ALL_COLUMNS];
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          const profileRes = await supabase
+            .from('profiles')
+            .select(buildProfileSelect(profileColumns))
+            .eq('id', session.user.id)
+            .single();
+          if (!profileRes.error) {
+            profileData = toProfileRow(profileRes.data as Record<string, unknown>);
+            profileError = null;
+            break;
+          }
+          const { columns: fallbackColumns, removedAny } = removeMissingOptionalColumns(profileColumns, profileRes.error);
+          if (!removedAny) {
+            profileError = profileRes.error;
+            break;
+          }
+          profileColumns = fallbackColumns;
+          profileError = profileRes.error;
+        }
+      }
 
       if (profileError || !profileData) {
         setAuthError('Tu cuenta no tiene acceso.');
@@ -428,14 +484,37 @@ const App: React.FC = () => {
         evaluationsQuery.eq('evaluator_id', userProfile.id);
       }
 
+      let profilesData: ProfileRow[] = [];
+      let profilesError: { message?: string } | null = null;
+      {
+        let profileColumns: string[] = [...PROFILE_ALL_COLUMNS];
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          const profilesRes = await supabase
+            .from('profiles')
+            .select(buildProfileSelect(profileColumns));
+          if (!profilesRes.error) {
+            profilesData = ((profilesRes.data || []) as Record<string, unknown>[]).map(row => (
+              toProfileRow(row) as ProfileRow
+            ));
+            profilesError = null;
+            break;
+          }
+          const { columns: fallbackColumns, removedAny } = removeMissingOptionalColumns(profileColumns, profilesRes.error);
+          if (!removedAny) {
+            profilesError = profilesRes.error;
+            break;
+          }
+          profileColumns = fallbackColumns;
+          profilesError = profilesRes.error;
+        }
+      }
+
       const [
-        profilesRes,
         assignmentsRes,
         evaluatorQuestionsRes,
         evaluationsRes,
         periodsRes,
       ] = await Promise.all([
-        supabase.from('profiles').select('id, email, name, role, group_name, area, person_group_id, campus, access_role, is_admin'),
         assignmentsQuery,
         evaluatorQuestionsQuery,
         evaluationsQuery,
@@ -476,13 +555,13 @@ const App: React.FC = () => {
         .select('section, sort_order')
         .order('sort_order', { ascending: true });
 
-      if (profilesRes.error || questionsError || categoriesError || assignmentsRes.error || evaluatorQuestionsRes.error || evaluationsRes.error || periodsRes.error) {
+      if (profilesError || questionsError || categoriesError || assignmentsRes.error || evaluatorQuestionsRes.error || evaluationsRes.error || periodsRes.error) {
         setAuthError('No se pudieron cargar los datos.');
         setIsLoadingData(false);
         return;
       }
 
-      const employeesList = (profilesRes.data || []).map((profile) => mapProfile(profile as ProfileRow));
+      const employeesList = profilesData.map((profile) => mapProfile(profile));
       const requiredArea = isAdmin ? null : getRequiredAreaByRole(userProfile.accessRole);
       const visibleEmployeeIds = new Set(
         (requiredArea

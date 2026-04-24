@@ -384,7 +384,6 @@ using (
     or public.is_admin()
     or (
       public.current_access_role() = 'manager'
-      and public.normalize_area(profiles.area) = 'administrativo'
     )
     or (
       public.current_access_role() = 'principal'
@@ -463,11 +462,8 @@ using (
   public.is_allowed_email()
   and (
     public.is_admin()
+    or public.current_access_role() = 'manager'
     or evaluator_id = (select auth.uid())
-    or (
-      public.current_access_role() = 'manager'
-      and public.target_in_area(assignments.target_id, 'administrativo')
-    )
     or (
       public.current_access_role() = 'principal'
       and public.target_in_current_campus(assignments.target_id)
@@ -504,16 +500,8 @@ using (
   public.is_allowed_email()
   and (
     public.is_admin()
+    or public.current_access_role() = 'manager'
     or evaluator_id = (select auth.uid())
-    or (
-      public.current_access_role() = 'manager'
-      and exists (
-        select 1
-        from public.profiles p
-        where p.id = evaluations.evaluated_id
-          and public.normalize_area(p.area) = 'administrativo'
-      )
-    )
     or (
       public.current_access_role() = 'principal'
       and public.current_user_campus() is not null
