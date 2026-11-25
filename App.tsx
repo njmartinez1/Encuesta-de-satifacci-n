@@ -1561,7 +1561,11 @@ const App: React.FC = () => {
               className={`mx-auto h-auto max-w-full object-contain mb-4 ${isDefaultLogo ? 'w-28' : 'w-40'}`}
             />
             <h1 className="text-3xl font-bold text-slate-800">Encuestas Reinvented</h1>
-            <p className="text-slate-500 mt-2">Ingresa tu correo para recibir un enlace de acceso.</p>
+            <p className="text-slate-500 mt-2">
+              {loginMode === 'link'
+                ? 'Ingresa tu correo para recibir un enlace de acceso.'
+                : 'Ingresa tu correo y contraseña para continuar.'}
+            </p>
           </div>
           {authError && (
             <div className="text-sm text-red-600 bg-red-50 border border-red-100 p-3 rounded-lg mb-4">
@@ -1619,7 +1623,7 @@ const App: React.FC = () => {
                   type="password"
                   value={passwordInput}
                   onChange={(event) => setPasswordInput(event.target.value)}
-                  placeholder="123456"
+                  autoComplete="current-password"
                   className="mt-2 w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-[var(--color-primary)] outline-none"
                 />
               </div>
@@ -1632,6 +1636,19 @@ const App: React.FC = () => {
               </button>
             </form>
           )}
+          <button
+            type="button"
+            disabled={isSendingLink || isSigningIn}
+            onClick={() => {
+              setAuthError(null);
+              setLinkSent(false);
+              setPasswordInput('');
+              setLoginMode(loginMode === 'link' ? 'password' : 'link');
+            }}
+            className="mt-4 w-full rounded-lg border border-[var(--color-primary-border)] px-4 py-2 font-semibold text-[var(--color-primary-dark)] disabled:opacity-60"
+          >
+            {loginMode === 'link' ? 'Ingresar con contraseña' : 'Ingresar con enlace por correo'}
+          </button>
         </div>
       </div>
     );
